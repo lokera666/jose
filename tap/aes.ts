@@ -1,19 +1,23 @@
 import type QUnit from 'qunit'
-// @ts-ignore
-import * as lib from '#dist/webapi'
 import * as env from './env.js'
+import type * as jose from '../src/index.js'
+import * as roundtrip from './encrypt.js'
 
-export default (QUnit: QUnit) => {
+export default (
+  QUnit: QUnit,
+  lib: typeof jose,
+  keys: Pick<typeof jose, 'exportJWK' | 'generateKeyPair' | 'generateSecret' | 'importJWK'>,
+) => {
   const { module, test } = QUnit
   module('aes.ts')
 
   type Vector = [string, boolean]
   const algorithms: Vector[] = [
     ['A128GCM', true],
-    ['A192GCM', !env.isChromium],
+    ['A192GCM', !env.isBlink],
     ['A256GCM', true],
     ['A128CBC-HS256', true],
-    ['A192CBC-HS384', !env.isChromium],
+    ['A192CBC-HS384', !env.isBlink],
     ['A256CBC-HS512', true],
   ]
 
@@ -27,23 +31,31 @@ export default (QUnit: QUnit) => {
     return result
   }
 
+  function secretsFor(enc: string) {
+    return [
+      keys.generateSecret(enc, { extractable: true }),
+      crypto.getRandomValues(
+        new Uint8Array(parseInt(enc.endsWith('GCM') ? enc.slice(1, 4) : enc.slice(-3)) >> 3),
+      ),
+    ]
+  }
+
   for (const vector of algorithms) {
     const [enc, works] = vector
 
     const execute = async (t: typeof QUnit.assert) => {
-      const secret = await lib.generateSecret(enc)
+      for await (const secret of secretsFor(enc)) {
+        await roundtrip.jwe(t, lib, keys, 'dir', enc, secret)
+      }
+    }
 
-      const jwe = await new lib.FlattenedEncrypt(crypto.getRandomValues(new Uint8Array(32)))
-        .setProtectedHeader({ alg: 'dir', enc })
-        .setAdditionalAuthenticatedData(crypto.getRandomValues(new Uint8Array(32)))
-        .encrypt(secret)
-
-      await lib.flattenedDecrypt(jwe, secret)
-      t.ok(1)
+    const jwt = async (t: typeof QUnit.assert) => {
+      await roundtrip.jwt(t, lib, keys, 'dir', enc, await secretsFor(enc)[0])
     }
 
     if (works) {
       test(title(vector), execute)
+      test(`${title(vector)} JWT`, jwt)
     } else {
       test(title(vector), async (t) => {
         await t.rejects(execute(t))

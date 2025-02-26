@@ -27,38 +27,6 @@ export const KEYS = {
       'Krphj6cA4Ls9aMYAHf5w+OW9D/t3a9p6mYm78AKIdBsPEtT1AQ==\n' +
       '-----END CERTIFICATE-----\n',
   },
-  Ed448: {
-    jwk: {
-      crv: 'Ed448',
-      d: '35yNO4M8bgte2BEjaCxrx9epQhzZ4VqF5GhjDaBHGPHHCznFXtmQuOps4XvrNpnVUtiawY4j3FCq',
-      kty: 'OKP',
-      x: 'pNAfXkImnUHY52ePCZoU4TKCnrq8baLpCiboNxlmN2AbG2xqmLW5F1DA3lsf-S6GWVIfXPysVd0A',
-    },
-    pkcs8:
-      '-----BEGIN PRIVATE KEY-----\n' +
-      'MEcCAQAwBQYDK2VxBDsEOd+cjTuDPG4LXtgRI2gsa8fXqUIc2eFaheRoYw2gRxjx\n' +
-      'xws5xV7ZkLjqbOF76zaZ1VLYmsGOI9xQqg==\n' +
-      '-----END PRIVATE KEY-----\n',
-    spki:
-      '-----BEGIN PUBLIC KEY-----\n' +
-      'MEMwBQYDK2VxAzoApNAfXkImnUHY52ePCZoU4TKCnrq8baLpCiboNxlmN2AbG2xq\n' +
-      'mLW5F1DA3lsf+S6GWVIfXPysVd0A\n' +
-      '-----END PUBLIC KEY-----\n',
-    x509:
-      '-----BEGIN CERTIFICATE-----\n' +
-      'MIIB7DCCAWygAwIBAgIUL85nVDm2evUiy7tWzGv6OxRjclswBQYDK2VxMEUxCzAJ\n' +
-      'BgNVBAYTAkNaMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5l\n' +
-      'dCBXaWRnaXRzIFB0eSBMdGQwIBcNMjIxMDExMTIyMTQwWhgPMjEyMjA5MTcxMjIx\n' +
-      'NDBaMEUxCzAJBgNVBAYTAkNaMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQK\n' +
-      'DBhJbnRlcm5ldCBXaWRnaXRzIFB0eSBMdGQwQzAFBgMrZXEDOgCk0B9eQiadQdjn\n' +
-      'Z48JmhThMoKeurxtoukKJug3GWY3YBsbbGqYtbkXUMDeWx/5LoZZUh9c/KxV3QCj\n' +
-      'UzBRMB0GA1UdDgQWBBSA9Hb5PA/vVojQWg4Per+myWHvCzAfBgNVHSMEGDAWgBSA\n' +
-      '9Hb5PA/vVojQWg4Per+myWHvCzAPBgNVHRMBAf8EBTADAQH/MAUGAytlcQNzAN9G\n' +
-      '9bFcVViH8c/zexozB/QCtueCu2kLNCLM9auSlFoHEy8u7+Gxyg1O+3bc43YxBObB\n' +
-      '+wwH7G+8gKKOkFL/43b7o2HNOlZUDHcWAP25cGY6lDFUvQDc0FGO0ge+h4tt075x\n' +
-      'e52JbhpyuHQlrWYQqHQSAA==\n' +
-      '-----END CERTIFICATE-----\n',
-  },
   P256: {
     jwk: {
       crv: 'P-256',
@@ -159,7 +127,7 @@ export const KEYS = {
   },
   RSA: {
     jwk: {
-      d: 'Z6bZKZhloVo5eMB7zpu0PuvBuDTGnyPTg16foy5EuIYF9zU8pnePTkAMzix2qKLjDELiaakvCNyeQIR4PFZv7YcHSlDVf7dmWDKK4wVKZbTWaAC5fPG1gyIIPAD0Gg4YWPqCEAThzeSYXjF1XQMwGd0jnKaxKMO4763MvXI5CkkmS8F9pLAoAqCjntGkA3yCB_byGDlFQ50UMZiesZyv-t_8tF8Yp4BFQyGG6aRYBntO1WzcTbVov4JJ0DA-jc1psqpIIMrFz044h5Ovm30spZRDTztwBIcXoGGs-d9AW8tgyWgmmA7YQpddpplNa9H6z-24LRGPv-OABA6U1QeeOQ',
+      d: 'B2Uk38NDKaU7ISmT2nqrQSuC5-fvZSJz4XHaWlVm-7lSV4OE1q7Z2fve9c93Q6Bkb8r6gwpTX_AFcWu6NbJmkascpOa5FhhGjffhxFxCKMRkT6ERt6PanHvLGKrk8UJsibjH_ds7UihOH-jd046jtoJjYHv7hmT3Rf0uttzGd6PDMHaZfp8xCjbAYZUFqW91O0hw3x1ZESsWyAS353JIjePzK5JmY7T7jbd-t6_M-u8i8-lv60Q8mvY0Np8iZadA3dFntIl0J4pwHGQGCC45mCAFIs6dgbVvyor7Eg82oDXHH3oOXIwYDi64Aw91EqxF8CdEByIV3_GphBzikEtTDw',
       dp: 'lRCClYTQvzgsVoVJjdyADVtceVsH7KfwpFxnrot_V40XJkUmiHj2yWGld8kB78q66faOavY-TFpmFlo-BQpEiXCDGzCqNCLJ-lF_ZnWyARfQHBBQPFHH2MqaNiS29yjpt7V4vc4z1DL_v5CaiR1wq9AZTABIUf8l2dAkHFrSTKk',
       dq: 'DMfbSrlSf71Ng5WuZxtENbQOSTOOP3rIyYibdPzbjJyb5raj09XQW_EJiaM45qbSwJfzFOnrFrQcoOJYmQTlHkVMcnXis2r1WXT0So32_D_kDevNZjHFG4PvqnK4ToV_GCGy1IbG4vHdjyMmHtG00zy9-02j7WV8-OerFP7QIAk',
       e: 'AQAB',
@@ -177,12 +145,12 @@ export const KEYS = {
       'kS8S6RjGtYB4VWtEvYNTYTwNKuUlTII75zY1o7dgWwV2jBbym+IwCc6zf1Vk16aJ\n' +
       'C1P4Ph+Djx1FfluSvONpHKaFjttYZ6W2zQWGs1vonL5YydI/GqmjNtDQ4MjiQZBh\n' +
       'KsqJQ0sN+dJQBH6jkjgenZuQ6te3qUtxw27Q+k+SxUBbNMvIW2LHEL0A8rJQlIpD\n' +
-      'vM2kqGrBAgMBAAECggEAZ6bZKZhloVo5eMB7zpu0PuvBuDTGnyPTg16foy5EuIYF\n' +
-      '9zU8pnePTkAMzix2qKLjDELiaakvCNyeQIR4PFZv7YcHSlDVf7dmWDKK4wVKZbTW\n' +
-      'aAC5fPG1gyIIPAD0Gg4YWPqCEAThzeSYXjF1XQMwGd0jnKaxKMO4763MvXI5Ckkm\n' +
-      'S8F9pLAoAqCjntGkA3yCB/byGDlFQ50UMZiesZyv+t/8tF8Yp4BFQyGG6aRYBntO\n' +
-      '1WzcTbVov4JJ0DA+jc1psqpIIMrFz044h5Ovm30spZRDTztwBIcXoGGs+d9AW8tg\n' +
-      'yWgmmA7YQpddpplNa9H6z+24LRGPv+OABA6U1QeeOQKBgQDgSp5Z/hvoEn/u/QPB\n' +
+      'vM2kqGrBAgMBAAECggEAB2Uk38NDKaU7ISmT2nqrQSuC5+fvZSJz4XHaWlVm+7lS\n' +
+      'V4OE1q7Z2fve9c93Q6Bkb8r6gwpTX/AFcWu6NbJmkascpOa5FhhGjffhxFxCKMRk\n' +
+      'T6ERt6PanHvLGKrk8UJsibjH/ds7UihOH+jd046jtoJjYHv7hmT3Rf0uttzGd6PD\n' +
+      'MHaZfp8xCjbAYZUFqW91O0hw3x1ZESsWyAS353JIjePzK5JmY7T7jbd+t6/M+u8i\n' +
+      '8+lv60Q8mvY0Np8iZadA3dFntIl0J4pwHGQGCC45mCAFIs6dgbVvyor7Eg82oDXH\n' +
+      'H3oOXIwYDi64Aw91EqxF8CdEByIV3/GphBzikEtTDwKBgQDgSp5Z/hvoEn/u/QPB\n' +
       'r+mtK8NHKWiYD8hmlIM//UKrLbggU/V0HN2qbSBhss2rfFAmSGm1sFsLvE4+3hnP\n' +
       'Sf7Ak4c6QZ/fWbn4ZzgGJH19M4R0VG0RAnIt8+77sP1Rskf9vP/Ow5DD1MPOWVmn\n' +
       'Uf1fzsDOSSQx+qOKfELvj20nWwKBgQDburMT62XhXQdP/w8YjpgbaumFF97k8CtF\n' +
@@ -242,53 +210,5 @@ export const KEYS = {
       'MCowBQYDK2VuAyEAaq1ZuCRIE3XXXcRpbC/txuESJ4KFH8VwQlz1nVa8Ugk=\n' +
       '-----END PUBLIC KEY-----\n',
     x509: undefined,
-  },
-  X448: {
-    jwk: {
-      crv: 'X448',
-      d: 'tMpYXWcUg7vGrUcZ1cUMVodjB6rWSOaBKgmaigThaInGRTCmaWPDYrE93wwPmyxOhVYRsmIRFv0',
-      kty: 'OKP',
-      x: 'jk-IiddcEYNq6CwHnqsQleaB86W2tUITnIMwkurT5BUdw2YpJxQt9rgnEZQW0KnQE-ORhEl0kaA',
-    },
-    pkcs8:
-      '-----BEGIN PRIVATE KEY-----\n' +
-      'MEYCAQAwBQYDK2VvBDoEOLTKWF1nFIO7xq1HGdXFDFaHYweq1kjmgSoJmooE4WiJ\n' +
-      'xkUwpmljw2KxPd8MD5ssToVWEbJiERb9\n' +
-      '-----END PRIVATE KEY-----\n',
-    spki:
-      '-----BEGIN PUBLIC KEY-----\n' +
-      'MEIwBQYDK2VvAzkAjk+IiddcEYNq6CwHnqsQleaB86W2tUITnIMwkurT5BUdw2Yp\n' +
-      'JxQt9rgnEZQW0KnQE+ORhEl0kaA=\n' +
-      '-----END PUBLIC KEY-----\n',
-    x509: undefined,
-  },
-  secp256k1: {
-    jwk: {
-      crv: 'secp256k1',
-      d: '4FnXRICPA8cKwNZhg1XvGS3cyWXzuJ17imMFjlgn42w',
-      kty: 'EC',
-      x: 'hwxzC9RSkkBmbBche2iTjNCLbB7XG6h5lfHmOXTQDmQ',
-      y: 'xzddq8Sa9Gn6EOCeYghU6uyWQoh1mWAHx0p6Zd0N9Bo',
-    },
-    pkcs8:
-      '-----BEGIN PRIVATE KEY-----\n' +
-      'MIGEAgEAMBAGByqGSM49AgEGBSuBBAAKBG0wawIBAQQg4FnXRICPA8cKwNZhg1Xv\n' +
-      'GS3cyWXzuJ17imMFjlgn42yhRANCAASHDHML1FKSQGZsFyF7aJOM0ItsHtcbqHmV\n' +
-      '8eY5dNAOZMc3XavEmvRp+hDgnmIIVOrslkKIdZlgB8dKemXdDfQa\n' +
-      '-----END PRIVATE KEY-----\n',
-    spki:
-      '-----BEGIN PUBLIC KEY-----\n' +
-      'MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEhwxzC9RSkkBmbBche2iTjNCLbB7XG6h5\n' +
-      'lfHmOXTQDmTHN12rxJr0afoQ4J5iCFTq7JZCiHWZYAfHSnpl3Q30Gg==\n' +
-      '-----END PUBLIC KEY-----\n',
-    x509:
-      '-----BEGIN CERTIFICATE-----\n' +
-      'MIIBBTCBrQIJAMqeTnxEXkWqMAoGCCqGSM49BAMCMA0xCzAJBgNVBAYTAkNaMB4X\n' +
-      'DTIyMTAxMTEyMjUxNFoXDTIzMTAwNjEyMjUxNFowDTELMAkGA1UEBhMCQ1owVjAQ\n' +
-      'BgcqhkjOPQIBBgUrgQQACgNCAASHDHML1FKSQGZsFyF7aJOM0ItsHtcbqHmV8eY5\n' +
-      'dNAOZMc3XavEmvRp+hDgnmIIVOrslkKIdZlgB8dKemXdDfQaMAoGCCqGSM49BAMC\n' +
-      'A0cAMEQCICLsIR+59yZbMsxvtYMH+Lmlko0/ihPHU/vbpfc7XXa1AiALT04GYkMx\n' +
-      '/xy0TNunfynvxfMAX+9x+3tO8g/KbPZp7w==\n' +
-      '-----END CERTIFICATE-----\n',
   },
 }

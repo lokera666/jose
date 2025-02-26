@@ -1,14 +1,19 @@
 import type QUnit from 'qunit'
-// @ts-ignore
-import * as lib from '#dist/webapi'
+import type * as jose from '../src/index.js'
+import * as roundtrip from './encrypt.js'
 
-export default (QUnit: QUnit) => {
+export default (
+  QUnit: QUnit,
+  lib: typeof jose,
+  keys: Pick<typeof jose, 'exportJWK' | 'generateKeyPair' | 'generateSecret' | 'importJWK'>,
+) => {
   const { module, test } = QUnit
   module('rsaes.ts')
 
+  const kps: Record<string, jose.GenerateKeyPairResult> = {}
+
   type Vector = [string, boolean]
   const algorithms: Vector[] = [
-    ['RSA1_5', false],
     ['RSA-OAEP', true],
     ['RSA-OAEP-256', true],
     ['RSA-OAEP-384', true],
@@ -29,19 +34,24 @@ export default (QUnit: QUnit) => {
     const [alg, works] = vector
 
     const execute = async (t: typeof QUnit.assert) => {
-      const { privateKey, publicKey } = await lib.generateKeyPair(alg)
+      if (!kps[alg]) {
+        kps[alg] = await keys.generateKeyPair(alg, { extractable: true })
+      }
 
-      const jwe = await new lib.FlattenedEncrypt(crypto.getRandomValues(new Uint8Array(32)))
-        .setProtectedHeader({ alg, enc: 'A256GCM' })
-        .setAdditionalAuthenticatedData(crypto.getRandomValues(new Uint8Array(32)))
-        .encrypt(publicKey)
+      await roundtrip.jwe(t, lib, keys, alg, 'A128GCM', kps[alg])
+    }
 
-      await lib.flattenedDecrypt(jwe, privateKey)
-      t.ok(1)
+    const jwt = async (t: typeof QUnit.assert) => {
+      if (!kps[alg]) {
+        kps[alg] = await keys.generateKeyPair(alg, { extractable: true })
+      }
+
+      await roundtrip.jwt(t, lib, keys, alg, 'A128GCM', kps[alg])
     }
 
     if (works) {
       test(title(vector), execute)
+      test(`${title(vector)} JWT`, jwt)
     } else {
       test(title(vector), async (t) => {
         await t.rejects(execute(t))

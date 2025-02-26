@@ -1,11 +1,10 @@
-import type {
-  KeyLike,
-  JWSHeaderParameters,
-  JWK,
-  JSONWebKeySet,
-  FlattenedJWSInput,
-  GetKeyFunction,
-} from '../types.d'
+/**
+ * Verification using a JSON Web Key Set (JWKS) available locally
+ *
+ * @module
+ */
+
+import type * as types from '../types.d.ts'
 import { importJWK } from '../key/import.js'
 import {
   JWKSInvalid,
@@ -30,11 +29,10 @@ function getKtyFromAlg(alg: unknown) {
 }
 
 interface Cache {
-  [alg: string]: KeyLike
+  [alg: string]: types.CryptoKey
 }
 
-/** @private */
-export function isJWKSLike(jwks: unknown): jwks is JSONWebKeySet {
+function isJWKSLike(jwks: unknown): jwks is types.JSONWebKeySet {
   return (
     jwks &&
     typeof jwks === 'object' &&
@@ -46,35 +44,35 @@ export function isJWKSLike(jwks: unknown): jwks is JSONWebKeySet {
 }
 
 function isJWKLike(key: unknown) {
-  return isObject<JWK>(key)
+  return isObject<types.JWK>(key)
 }
 
 function clone<T>(obj: T): T {
-  // @ts-ignore
   if (typeof structuredClone === 'function') {
-    // @ts-ignore
     return structuredClone(obj)
   }
 
   return JSON.parse(JSON.stringify(obj))
 }
 
-/** @private */
-export class LocalJWKSet {
-  protected _jwks?: JSONWebKeySet
+class LocalJWKSet {
+  private _jwks?: types.JSONWebKeySet
 
-  private _cached: WeakMap<JWK, Cache> = new WeakMap()
+  private _cached: WeakMap<types.JWK, Cache> = new WeakMap()
 
   constructor(jwks: unknown) {
     if (!isJWKSLike(jwks)) {
       throw new JWKSInvalid('JSON Web Key Set malformed')
     }
 
-    this._jwks = clone<JSONWebKeySet>(jwks)
+    this._jwks = clone<types.JSONWebKeySet>(jwks)
   }
 
-  async getKey(protectedHeader: JWSHeaderParameters, token: FlattenedJWSInput): Promise<KeyLike> {
-    const { alg, kid } = { ...protectedHeader, ...token.header }
+  async getKey(
+    protectedHeader?: types.JWSHeaderParameters,
+    token?: types.FlattenedJWSInput,
+  ): Promise<types.CryptoKey> {
+    const { alg, kid } = { ...protectedHeader, ...token?.header }
     const kty = getKtyFromAlg(alg)
 
     const candidates = this._jwks!.keys.filter((jwk) => {
@@ -101,25 +99,21 @@ export class LocalJWKSet {
         candidate = jwk.key_ops.includes('verify')
       }
 
-      // filter out non-applicable OKP Sub Types
-      if (candidate && alg === 'EdDSA') {
-        candidate = jwk.crv === 'Ed25519' || jwk.crv === 'Ed448'
-      }
-
-      // filter out non-applicable EC curves
+      // filter out non-applicable curves / sub types
       if (candidate) {
         switch (alg) {
           case 'ES256':
             candidate = jwk.crv === 'P-256'
-            break
-          case 'ES256K':
-            candidate = jwk.crv === 'secp256k1'
             break
           case 'ES384':
             candidate = jwk.crv === 'P-384'
             break
           case 'ES512':
             candidate = jwk.crv === 'P-521'
+            break
+          case 'Ed25519': // Fall through
+          case 'EdDSA':
+            candidate = jwk.crv === 'Ed25519'
             break
         }
       }
@@ -131,32 +125,61 @@ export class LocalJWKSet {
 
     if (length === 0) {
       throw new JWKSNoMatchingKey()
-    } else if (length !== 1) {
-      throw new JWKSMultipleMatchingKeys()
     }
+    if (length !== 1) {
+      const error = new JWKSMultipleMatchingKeys()
 
-    const cached = this._cached.get(jwk) || this._cached.set(jwk, {}).get(jwk)!
-    if (cached[alg!] === undefined) {
-      const keyObject = await importJWK({ ...jwk, ext: true }, alg)
-
-      if (keyObject instanceof Uint8Array || keyObject.type !== 'public') {
-        throw new JWKSInvalid('JSON Web Key Set members must be public keys')
+      const { _cached } = this
+      error[Symbol.asyncIterator] = async function* () {
+        for (const jwk of candidates) {
+          try {
+            yield await importWithAlgCache(_cached, jwk, alg!)
+          } catch {}
+        }
       }
 
-      cached[alg!] = keyObject
+      throw error
     }
 
-    return cached[alg!]
+    return importWithAlgCache(this._cached, jwk, alg!)
   }
 }
 
+async function importWithAlgCache(cache: WeakMap<types.JWK, Cache>, jwk: types.JWK, alg: string) {
+  const cached = cache.get(jwk) || cache.set(jwk, {}).get(jwk)!
+  if (cached[alg] === undefined) {
+    const key = await importJWK({ ...jwk, ext: true }, alg)
+
+    if (key instanceof Uint8Array || key.type !== 'public') {
+      throw new JWKSInvalid('JSON Web Key Set members must be public keys')
+    }
+
+    cached[alg] = key
+  }
+
+  return cached[alg]
+}
+
 /**
- * Returns a function that resolves to a key object from a locally stored, or otherwise available,
- * JSON Web Key Set.
+ * Returns a function that resolves a JWS JOSE Header to a public key object from a locally stored,
+ * or otherwise available, JSON Web Key Set.
  *
- * Only a single public key must match the selection process.
+ * It uses the "alg" (JWS Algorithm) Header Parameter to determine the right JWK "kty" (Key Type),
+ * then proceeds to match the JWK "kid" (Key ID) with one found in the JWS Header Parameters (if
+ * there is one) while also respecting the JWK "use" (Public Key Use) and JWK "key_ops" (Key
+ * Operations) Parameters (if they are present on the JWK).
  *
- * @example Usage
+ * Only a single public key must match the selection process. As shown in the example below when
+ * multiple keys get matched it is possible to opt-in to iterate over the matched keys and attempt
+ * verification in an iterative manner.
+ *
+ * Note: The function's purpose is to resolve public keys used for verifying signatures and will not
+ * work for public encryption keys.
+ *
+ * This function is exported (as a named export) from the main `'jose'` module entry point as well
+ * as from its subpath export `'jose/jwks/local'`.
+ *
+ * @example
  *
  * ```js
  * const JWKS = jose.createLocalJWKSet({
@@ -185,10 +208,62 @@ export class LocalJWKSet {
  * console.log(payload)
  * ```
  *
+ * @example
+ *
+ * Opting-in to multiple JWKS matches using `createLocalJWKSet`
+ *
+ * ```js
+ * const options = {
+ *   issuer: 'urn:example:issuer',
+ *   audience: 'urn:example:audience',
+ * }
+ * const { payload, protectedHeader } = await jose
+ *   .jwtVerify(jwt, JWKS, options)
+ *   .catch(async (error) => {
+ *     if (error?.code === 'ERR_JWKS_MULTIPLE_MATCHING_KEYS') {
+ *       for await (const publicKey of error) {
+ *         try {
+ *           return await jose.jwtVerify(jwt, publicKey, options)
+ *         } catch (innerError) {
+ *           if (innerError?.code === 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED') {
+ *             continue
+ *           }
+ *           throw innerError
+ *         }
+ *       }
+ *       throw new jose.errors.JWSSignatureVerificationFailed()
+ *     }
+ *
+ *     throw error
+ *   })
+ * console.log(protectedHeader)
+ * console.log(payload)
+ * ```
+ *
  * @param jwks JSON Web Key Set formatted object.
  */
 export function createLocalJWKSet(
-  jwks: JSONWebKeySet,
-): GetKeyFunction<JWSHeaderParameters, FlattenedJWSInput> {
-  return LocalJWKSet.prototype.getKey.bind(new LocalJWKSet(jwks))
+  jwks: types.JSONWebKeySet,
+): (
+  protectedHeader?: types.JWSHeaderParameters,
+  token?: types.FlattenedJWSInput,
+) => Promise<types.CryptoKey> {
+  const set = new LocalJWKSet(jwks)
+
+  const localJWKSet = async (
+    protectedHeader?: types.JWSHeaderParameters,
+    token?: types.FlattenedJWSInput,
+  ): Promise<types.CryptoKey> => set.getKey(protectedHeader, token)
+
+  Object.defineProperties(localJWKSet, {
+    jwks: {
+      // @ts-expect-error
+      value: () => clone(set._jwks),
+      enumerable: true,
+      configurable: false,
+      writable: false,
+    },
+  })
+
+  return localJWKSet
 }

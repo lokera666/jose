@@ -1,8 +1,8 @@
 {
   "commit-all": true,
   "scripts": {
-    "prerelease": "npm run-script build-all",
-    "postbump": "node ./tools/postbump.js",
+    "prerelease": "node ./tools/prebump.cjs && npm run-script build-all",
+    "postbump": "node ./tools/postbump.cjs",
     "postchangelog": "sed -i '' -e 's/### \\[/## [/g' CHANGELOG.md"
   },
   "types": [
@@ -20,7 +20,8 @@
     },
     {
       "type": "docs",
-      "hidden": true
+      "section": "Documentation",
+      "hidden": false
     },
     {
       "type": "style",
@@ -29,6 +30,11 @@
     {
       "type": "refactor",
       "section": "Refactor",
+      "hidden": false
+    },
+    {
+      "type": "revert",
+      "section": "Reverts",
       "hidden": false
     },
     {

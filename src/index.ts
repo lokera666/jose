@@ -35,8 +35,13 @@ export { calculateJwkThumbprint, calculateJwkThumbprintUri } from './jwk/thumbpr
 export { EmbeddedJWK } from './jwk/embedded.js'
 
 export { createLocalJWKSet } from './jwks/local.js'
-export { createRemoteJWKSet } from './jwks/remote.js'
-export type { RemoteJWKSetOptions } from './jwks/remote.js'
+export { createRemoteJWKSet, jwksCache, customFetch } from './jwks/remote.js'
+export type {
+  RemoteJWKSetOptions,
+  JWKSCacheInput,
+  ExportedJWKSCache,
+  FetchImplementation,
+} from './jwks/remote.js'
 
 export { UnsecuredJWT } from './jwt/unsecured.js'
 export type { UnsecuredResult } from './jwt/unsecured.js'
@@ -44,7 +49,7 @@ export type { UnsecuredResult } from './jwt/unsecured.js'
 export { exportPKCS8, exportSPKI, exportJWK } from './key/export.js'
 
 export { importSPKI, importPKCS8, importX509, importJWK } from './key/import.js'
-export type { PEMImportOptions } from './key/import.js'
+export type { KeyImportOptions } from './key/import.js'
 
 export { decodeProtectedHeader } from './util/decode_protected_header.js'
 export { decodeJwt } from './util/decode_jwt.js'
@@ -60,39 +65,54 @@ export type { GenerateSecretOptions } from './key/generate_secret.js'
 export * as base64url from './util/base64url.js'
 
 export type {
-  KeyLike,
-  JWK,
-  FlattenedJWSInput,
-  GeneralJWSInput,
-  FlattenedJWS,
-  GeneralJWS,
-  JoseHeaderParameters,
-  JWSHeaderParameters,
-  JWEKeyManagementHeaderParameters,
-  FlattenedJWE,
-  GeneralJWE,
-  JWEHeaderParameters,
-  CritOption,
-  DeflateOption,
-  DecryptOptions,
-  EncryptOptions,
-  JWTClaimVerificationOptions,
-  VerifyOptions,
-  SignOptions,
-  JWTPayload,
-  DeflateFunction,
-  InflateFunction,
-  FlattenedDecryptResult,
-  GeneralDecryptResult,
   CompactDecryptResult,
-  FlattenedVerifyResult,
-  GeneralVerifyResult,
-  CompactVerifyResult,
-  JWTVerifyResult,
-  JWTDecryptResult,
-  ResolvedKey,
   CompactJWEHeaderParameters,
   CompactJWSHeaderParameters,
-  JWTHeaderParameters,
+  CompactVerifyResult,
+  CritOption,
+  CryptoKey,
+  DecryptOptions,
+  EncryptOptions,
+  FlattenedDecryptResult,
+  FlattenedJWE,
+  FlattenedJWS,
+  FlattenedJWSInput,
+  FlattenedVerifyResult,
+  GeneralDecryptResult,
+  GeneralJWE,
+  GeneralJWS,
+  GeneralJWSInput,
+  GeneralVerifyResult,
+  GetKeyFunction,
+  JoseHeaderParameters,
   JSONWebKeySet,
-} from './types.d'
+  JWEHeaderParameters,
+  JWEKeyManagementHeaderParameters,
+  JWK_EC_Private,
+  JWK_EC_Public,
+  JWK_oct,
+  JWK_OKP_Private,
+  JWK_OKP_Public,
+  JWK_RSA_Private,
+  JWK_RSA_Public,
+  JWK,
+  JWKParameters,
+  JWSHeaderParameters,
+  JWTClaimVerificationOptions,
+  JWTDecryptResult,
+  JWTHeaderParameters,
+  JWTPayload,
+  JWTVerifyResult,
+  KeyObject,
+  ResolvedKey,
+  SignOptions,
+  VerifyOptions,
+} from './types.d.ts'
+
+/**
+ * In prior releases this indicated whether a Node.js-specific build was loaded, this is now fixed
+ * to `"WebCryptoAPI"`
+ *
+ * @deprecated
+ */
+export const cryptoRuntime = 'WebCryptoAPI'

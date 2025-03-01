@@ -1,4 +1,5 @@
-function message(msg: string, actual: unknown, ...types: string[]) {
+function message(msg: string, actual: unknown, ...types: Array<string | null>) {
+  types = types.filter(Boolean)
   if (types.length > 2) {
     const last = types.pop()
     msg += `one of type ${types.join(', ')}, or ${last}.`
@@ -13,7 +14,7 @@ function message(msg: string, actual: unknown, ...types: string[]) {
   } else if (typeof actual === 'function' && actual.name) {
     msg += ` Received function ${actual.name}`
   } else if (typeof actual === 'object' && actual != null) {
-    if (actual.constructor && actual.constructor.name) {
+    if (actual.constructor?.name) {
       msg += ` Received an instance of ${actual.constructor.name}`
     }
   }
@@ -25,6 +26,6 @@ export default (actual: unknown, ...types: string[]) => {
   return message('Key must be ', actual, ...types)
 }
 
-export function withAlg(alg: string, actual: unknown, ...types: string[]) {
+export function withAlg(alg: string, actual: unknown, ...types: Array<string | null>) {
   return message(`Key for the ${alg} algorithm must be `, actual, ...types)
 }

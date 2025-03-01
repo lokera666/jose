@@ -1,106 +1,37 @@
-import { decode as decodeBase64URL, encodeBase64, decodeBase64 } from '../runtime/base64url.js'
-import { fromSPKI as importPublic } from '../runtime/asn1.js'
-import { fromPKCS8 as importPrivate } from '../runtime/asn1.js'
-import asKeyObject from '../runtime/jwk_to_key.js'
+/**
+ * Cryptographic key import functions
+ *
+ * @module
+ */
+
+import { decode as decodeBase64URL } from '../util/base64url.js'
+import { fromSPKI, fromPKCS8, fromX509 } from '../lib/asn1.js'
+import toCryptoKey from '../lib/jwk_to_key.js'
 
 import { JOSENotSupported } from '../util/errors.js'
-import formatPEM from '../lib/format_pem.js'
 import isObject from '../lib/is_object.js'
-import type { JWK, KeyLike } from '../types.d'
+import type * as types from '../types.d.ts'
 
-function getElement(seq: Uint8Array) {
-  let result = []
-  let next = 0
-
-  while (next < seq.length) {
-    let nextPart = parseElement(seq.subarray(next))
-    result.push(nextPart)
-    next += nextPart.byteLength
-  }
-  return result
-}
-
-function parseElement(bytes: Uint8Array) {
-  let position = 0
-
-  // tag
-  let tag = bytes[0] & 0x1f
-  position++
-  if (tag === 0x1f) {
-    tag = 0
-    while (bytes[position] >= 0x80) {
-      tag = tag * 128 + bytes[position] - 0x80
-      position++
-    }
-    tag = tag * 128 + bytes[position] - 0x80
-    position++
-  }
-
-  // length
-  let length = 0
-  if (bytes[position] < 0x80) {
-    length = bytes[position]
-    position++
-  } else if (length === 0x80) {
-    length = 0
-
-    while (bytes[position + length] !== 0 || bytes[position + length + 1] !== 0) {
-      if (length > bytes.byteLength) {
-        throw new TypeError('invalid indefinite form length')
-      }
-      length++
-    }
-
-    const byteLength = position + length + 2
-    return {
-      byteLength,
-      contents: bytes.subarray(position, position + length),
-      raw: bytes.subarray(0, byteLength),
-    }
-  } else {
-    let numberOfDigits = bytes[position] & 0x7f
-    position++
-    length = 0
-    for (let i = 0; i < numberOfDigits; i++) {
-      length = length * 256 + bytes[position]
-      position++
-    }
-  }
-
-  const byteLength = position + length
-  return {
-    byteLength,
-    contents: bytes.subarray(position, byteLength),
-    raw: bytes.subarray(0, byteLength),
-  }
-}
-
-function spkiFromX509(buf: Uint8Array) {
-  const tbsCertificate = getElement(getElement(parseElement(buf).contents)[0].contents)
-  return encodeBase64(tbsCertificate[tbsCertificate[0].raw[0] === 0xa0 ? 6 : 5].raw)
-}
-
-function getSPKI(x509: string): string {
-  const pem = x509.replace(/(?:-----(?:BEGIN|END) CERTIFICATE-----|\s)/g, '')
-  const raw = decodeBase64(pem)
-  return formatPEM(spkiFromX509(raw), 'PUBLIC KEY')
-}
-
-export interface PEMImportOptions {
+/** Key Import Function options. */
+export interface KeyImportOptions {
   /**
-   * (Web Cryptography API specific) The value to use as
-   * [SubtleCrypto.importKey()](https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/importKey)
-   * `extractable` argument. Default is false.
+   * The value to use as {@link !SubtleCrypto.importKey} `extractable` argument. Default is false for
+   * private keys, true otherwise.
    */
   extractable?: boolean
 }
 
 /**
- * Imports a PEM-encoded SPKI string as a runtime-specific public key representation (KeyObject or
- * CryptoKey). See [Algorithm Key Requirements](https://github.com/panva/jose/issues/210) to learn
- * about key to algorithm requirements and mapping.
+ * Imports a PEM-encoded SPKI string as a {@link !CryptoKey}.
  *
- * @example Usage
+ * Note: The OID id-RSASSA-PSS (1.2.840.113549.1.1.10) is not supported in
+ * {@link https://w3c.github.io/webcrypto/ Web Cryptography API}, use the OID rsaEncryption
+ * (1.2.840.113549.1.1.1) instead for all RSA algorithms.
+ *
+ * This function is exported (as a named export) from the main `'jose'` module entry point as well
+ * as from its subpath export `'jose/key/import'`.
+ *
+ * @example
  *
  * ```js
  * const algorithm = 'ES256'
@@ -111,27 +42,32 @@ export interface PEMImportOptions {
  * const ecPublicKey = await jose.importSPKI(spki, algorithm)
  * ```
  *
- * @param pem PEM-encoded SPKI string
- * @param alg JSON Web Algorithm identifier to be used with the imported key.
+ * @param spki PEM-encoded SPKI string
+ * @param alg JSON Web Algorithm identifier to be used with the imported key. See
+ *   {@link https://github.com/panva/jose/issues/210 Algorithm Key Requirements}.
  */
 export async function importSPKI(
   spki: string,
   alg: string,
-  options?: PEMImportOptions,
-): Promise<KeyLike> {
+  options?: KeyImportOptions,
+): Promise<types.CryptoKey> {
   if (typeof spki !== 'string' || spki.indexOf('-----BEGIN PUBLIC KEY-----') !== 0) {
     throw new TypeError('"spki" must be SPKI formatted string')
   }
-  return importPublic(spki, alg, options)
+  return fromSPKI(spki, alg, options)
 }
 
 /**
- * Imports the SPKI from an X.509 string certificate as a runtime-specific public key representation
- * (KeyObject or CryptoKey). See [Algorithm Key
- * Requirements](https://github.com/panva/jose/issues/210) to learn about key to algorithm
- * requirements and mapping.
+ * Imports the SPKI from an X.509 string certificate as a {@link !CryptoKey}.
  *
- * @example Usage
+ * Note: The OID id-RSASSA-PSS (1.2.840.113549.1.1.10) is not supported in
+ * {@link https://w3c.github.io/webcrypto/ Web Cryptography API}, use the OID rsaEncryption
+ * (1.2.840.113549.1.1.1) instead for all RSA algorithms.
+ *
+ * This function is exported (as a named export) from the main `'jose'` module entry point as well
+ * as from its subpath export `'jose/key/import'`.
+ *
+ * @example
  *
  * ```js
  * const algorithm = 'ES256'
@@ -148,33 +84,32 @@ export async function importSPKI(
  * const ecPublicKey = await jose.importX509(x509, algorithm)
  * ```
  *
- * @param pem X.509 certificate string
- * @param alg JSON Web Algorithm identifier to be used with the imported key.
+ * @param x509 X.509 certificate string
+ * @param alg JSON Web Algorithm identifier to be used with the imported key. See
+ *   {@link https://github.com/panva/jose/issues/210 Algorithm Key Requirements}.
  */
 export async function importX509(
   x509: string,
   alg: string,
-  options?: PEMImportOptions,
-): Promise<KeyLike> {
+  options?: KeyImportOptions,
+): Promise<types.CryptoKey> {
   if (typeof x509 !== 'string' || x509.indexOf('-----BEGIN CERTIFICATE-----') !== 0) {
     throw new TypeError('"x509" must be X.509 formatted string')
   }
-  let spki: string
-  try {
-    spki = getSPKI(x509)
-  } catch (cause) {
-    // @ts-ignore
-    throw new TypeError('failed to parse the X.509 certificate', { cause })
-  }
-  return importPublic(spki, alg, options)
+  return fromX509(x509, alg, options)
 }
 
 /**
- * Imports a PEM-encoded PKCS8 string as a runtime-specific private key representation (KeyObject or
- * CryptoKey). See [Algorithm Key Requirements](https://github.com/panva/jose/issues/210) to learn
- * about key to algorithm requirements and mapping. Encrypted keys are not supported.
+ * Imports a PEM-encoded PKCS#8 string as a {@link !CryptoKey}.
  *
- * @example Usage
+ * Note: The OID id-RSASSA-PSS (1.2.840.113549.1.1.10) is not supported in
+ * {@link https://w3c.github.io/webcrypto/ Web Cryptography API}, use the OID rsaEncryption
+ * (1.2.840.113549.1.1.1) instead for all RSA algorithms.
+ *
+ * This function is exported (as a named export) from the main `'jose'` module entry point as well
+ * as from its subpath export `'jose/key/import'`.
+ *
+ * @example
  *
  * ```js
  * const algorithm = 'ES256'
@@ -186,29 +121,35 @@ export async function importX509(
  * const ecPrivateKey = await jose.importPKCS8(pkcs8, algorithm)
  * ```
  *
- * @param pem PEM-encoded PKCS8 string
- * @param alg JSON Web Algorithm identifier to be used with the imported key.
+ * @param pkcs8 PEM-encoded PKCS#8 string
+ * @param alg JSON Web Algorithm identifier to be used with the imported key. See
+ *   {@link https://github.com/panva/jose/issues/210 Algorithm Key Requirements}.
  */
 export async function importPKCS8(
   pkcs8: string,
   alg: string,
-  options?: PEMImportOptions,
-): Promise<KeyLike> {
+  options?: KeyImportOptions,
+): Promise<types.CryptoKey> {
   if (typeof pkcs8 !== 'string' || pkcs8.indexOf('-----BEGIN PRIVATE KEY-----') !== 0) {
-    throw new TypeError('"pkcs8" must be PKCS8 formatted string')
+    throw new TypeError('"pkcs8" must be PKCS#8 formatted string')
   }
-  return importPrivate(pkcs8, alg, options)
+  return fromPKCS8(pkcs8, alg, options)
 }
 
 /**
- * Imports a JWK to a runtime-specific key representation (KeyLike). Either JWK "alg" (Algorithm)
- * Parameter must be present or the optional "alg" argument. When running on a runtime using [Web
- * Cryptography API](https://www.w3.org/TR/WebCryptoAPI/) the jwk parameters "use", "key_ops", and
- * "ext" are also used in the resulting `CryptoKey`. See [Algorithm Key
- * Requirements](https://github.com/panva/jose/issues/210) to learn about key to algorithm
- * requirements and mapping.
+ * Imports a JWK to a {@link !CryptoKey}. Either the JWK "alg" (Algorithm) Parameter, or the optional
+ * "alg" argument, must be present for asymmetric JSON Web Key imports.
  *
- * @example Usage
+ * Note: The JSON Web Key parameters "use", "key_ops", and "ext" are also used in the
+ * {@link !CryptoKey} import process.
+ *
+ * Note: Symmetric JSON Web Keys (i.e. `kty: "oct"`) yield back an {@link !Uint8Array} instead of a
+ * {@link !CryptoKey}.
+ *
+ * This function is exported (as a named export) from the main `'jose'` module entry point as well
+ * as from its subpath export `'jose/key/import'`.
+ *
+ * @example
  *
  * ```js
  * const ecPublicKey = await jose.importJWK(
@@ -233,24 +174,22 @@ export async function importPKCS8(
  *
  * @param jwk JSON Web Key.
  * @param alg JSON Web Algorithm identifier to be used with the imported key. Default is the "alg"
- *   property on the JWK.
- * @param octAsKeyObject Forces a symmetric key to be imported to a KeyObject or CryptoKey. Default
- *   is true unless JWK "ext" (Extractable) is true.
+ *   property on the JWK. See
+ *   {@link https://github.com/panva/jose/issues/210 Algorithm Key Requirements}.
  */
 export async function importJWK(
-  jwk: JWK,
+  jwk: types.JWK,
   alg?: string,
-  octAsKeyObject?: boolean,
-): Promise<KeyLike | Uint8Array> {
+  options?: KeyImportOptions,
+): Promise<types.CryptoKey | Uint8Array> {
   if (!isObject(jwk)) {
     throw new TypeError('JWK must be an object')
   }
 
-  alg ||= jwk.alg
+  let ext: boolean | undefined
 
-  if (typeof alg !== 'string' || !alg) {
-    throw new TypeError('"alg" argument is required when "jwk.alg" is not present')
-  }
+  alg ??= jwk.alg
+  ext ??= options?.extractable ?? jwk.ext
 
   switch (jwk.kty) {
     case 'oct':
@@ -258,22 +197,16 @@ export async function importJWK(
         throw new TypeError('missing "k" (Key Value) Parameter value')
       }
 
-      octAsKeyObject ??= jwk.ext !== true
-
-      if (octAsKeyObject) {
-        return asKeyObject({ ...jwk, alg, ext: false })
-      }
-
       return decodeBase64URL(jwk.k)
     case 'RSA':
-      if (jwk.oth !== undefined) {
+      if ('oth' in jwk && jwk.oth !== undefined) {
         throw new JOSENotSupported(
           'RSA JWK "oth" (Other Primes Info) Parameter value is not supported',
         )
       }
     case 'EC':
     case 'OKP':
-      return asKeyObject({ ...jwk, alg })
+      return toCryptoKey({ ...jwk, alg, ext })
     default:
       throw new JOSENotSupported('Unsupported "kty" (Key Type) Parameter value')
   }

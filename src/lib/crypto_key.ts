@@ -1,10 +1,13 @@
-import { isCloudflareWorkers } from '../runtime/env.js'
+import type * as types from '../types.d.ts'
 
 function unusable(name: string | number, prop = 'algorithm.name') {
   return new TypeError(`CryptoKey does not support this operation, its ${prop} must be ${name}`)
 }
 
-function isAlgorithm<T = KeyAlgorithm>(algorithm: any, name: string): algorithm is T {
+function isAlgorithm<T extends KeyAlgorithm>(
+  algorithm: KeyAlgorithm,
+  name: string,
+): algorithm is T {
   return algorithm.name === name
 }
 
@@ -25,23 +28,15 @@ function getNamedCurve(alg: string) {
   }
 }
 
-function checkUsage(key: CryptoKey, usages: KeyUsage[]) {
-  if (usages.length && !usages.some((expected) => key.usages.includes(expected))) {
-    let msg = 'CryptoKey does not support this operation, its usages must include '
-    if (usages.length > 2) {
-      const last = usages.pop()
-      msg += `one of ${usages.join(', ')}, or ${last}.`
-    } else if (usages.length === 2) {
-      msg += `one of ${usages[0]} or ${usages[1]}.`
-    } else {
-      msg += `${usages[0]}.`
-    }
-
-    throw new TypeError(msg)
+function checkUsage(key: types.CryptoKey, usage?: KeyUsage) {
+  if (usage && !key.usages.includes(usage)) {
+    throw new TypeError(
+      `CryptoKey does not support this operation, its usages must include ${usage}.`,
+    )
   }
 }
 
-export function checkSigCryptoKey(key: CryptoKey, alg: string, ...usages: KeyUsage[]) {
+export function checkSigCryptoKey(key: types.CryptoKey, alg: string, usage: KeyUsage) {
   switch (alg) {
     case 'HS256':
     case 'HS384':
@@ -71,14 +66,9 @@ export function checkSigCryptoKey(key: CryptoKey, alg: string, ...usages: KeyUsa
       if (actual !== expected) throw unusable(`SHA-${expected}`, 'algorithm.hash')
       break
     }
-    case isCloudflareWorkers() && 'EdDSA': {
-      if (!isAlgorithm(key.algorithm, 'NODE-ED25519')) throw unusable('NODE-ED25519')
-      break
-    }
+    case 'Ed25519': // Fall through
     case 'EdDSA': {
-      if (key.algorithm.name !== 'Ed25519' && key.algorithm.name !== 'Ed448') {
-        throw unusable('Ed25519 or Ed448')
-      }
+      if (!isAlgorithm(key.algorithm, 'Ed25519')) throw unusable('Ed25519')
       break
     }
     case 'ES256':
@@ -94,10 +84,10 @@ export function checkSigCryptoKey(key: CryptoKey, alg: string, ...usages: KeyUsa
       throw new TypeError('CryptoKey does not support this operation')
   }
 
-  checkUsage(key, usages)
+  checkUsage(key, usage)
 }
 
-export function checkEncCryptoKey(key: CryptoKey, alg: string, ...usages: KeyUsage[]) {
+export function checkEncCryptoKey(key: types.CryptoKey, alg: string, usage?: KeyUsage) {
   switch (alg) {
     case 'A128GCM':
     case 'A192GCM':
@@ -121,10 +111,9 @@ export function checkEncCryptoKey(key: CryptoKey, alg: string, ...usages: KeyUsa
       switch (key.algorithm.name) {
         case 'ECDH':
         case 'X25519':
-        case 'X448':
           break
         default:
-          throw unusable('ECDH, X25519, or X448')
+          throw unusable('ECDH or X25519')
       }
       break
     }
@@ -147,5 +136,5 @@ export function checkEncCryptoKey(key: CryptoKey, alg: string, ...usages: KeyUsa
       throw new TypeError('CryptoKey does not support this operation')
   }
 
-  checkUsage(key, usages)
+  checkUsage(key, usage)
 }

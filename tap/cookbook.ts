@@ -1,20 +1,31 @@
 import type QUnit from 'qunit'
-// @ts-ignore
-import * as lib from '#dist/webapi'
 import * as env from './env.js'
+import type * as jose from '../src/index.js'
 
 // @ts-ignore
 import jwsVectors from '../cookbook/jws.mjs'
 // @ts-ignore
 import jweVectors from '../cookbook/jwe.mjs'
 
-export default (QUnit: QUnit) => {
+// https://bugs.webkit.org/show_bug.cgi?id=262499
+// https://github.com/web-platform-tests/wpt/pull/42292
+if (env.isWebKit) {
+  // @ts-ignore
+  const ed25519 = jwsVectors.find((vector) => vector.title.includes('Ed25519'))
+  ed25519.reproducible = false
+}
+
+export default (
+  QUnit: QUnit,
+  lib: typeof jose,
+  keys: Pick<typeof jose, 'exportJWK' | 'generateKeyPair' | 'generateSecret' | 'importJWK'>,
+) => {
   const { module, test } = QUnit
 
   const encode = TextEncoder.prototype.encode.bind(new TextEncoder())
 
-  const pubjwk = (jwk: JsonWebKey) => {
-    let { d, p, q, dp, dq, qi, ...publicJwk } = jwk
+  const pubjwk = (jwk: jose.JWK) => {
+    const { d, p, q, dp, dq, qi, ...publicJwk } = jwk
     return publicJwk
   }
 
@@ -34,8 +45,8 @@ export default (QUnit: QUnit) => {
       if (vector.input.alg === 'ES512') {
         return !env.isDeno
       }
-      if (vector.input.alg === 'EdDSA') {
-        return env.isDeno || env.isWorkers || env.isNode
+      if (vector.input.key?.crv === 'Ed25519') {
+        return !env.isBlink
       }
       return true
     }
@@ -43,14 +54,13 @@ export default (QUnit: QUnit) => {
     const execute = (vector: any) => async (t: typeof QUnit.assert) => {
       const reproducible = !!vector.reproducible
 
+      const privateKey = await keys.importJWK(vector.input.key, vector.input.alg)
+      const publicKey = await keys.importJWK(pubjwk(vector.input.key), vector.input.alg)
+
       if (reproducible) {
         // sign and compare results are the same
         const runs = [[flattened, vector.output.json_flat]]
-        if (
-          !vector.signing.protected ||
-          !('b64' in vector.signing.protected) ||
-          vector.signing.protected.b64 === true
-        ) {
+        if (vector.signing.protected?.b64 !== undefined) {
           runs.push([compact, vector.output.compact])
         }
         for (const [serialization, expectedResult] of runs) {
@@ -67,18 +77,22 @@ export default (QUnit: QUnit) => {
             sign.setUnprotectedHeader(vector.signing.unprotected)
           }
 
-          const privateKey = await lib.importJWK(vector.input.key, vector.input.alg)
-
           const result = await sign.sign(privateKey)
+
+          if (vector.signing.protected?.b64 === false) {
+            await serialization.verify(
+              { ...result, payload: encode(vector.input.payload) },
+              publicKey,
+            )
+          } else {
+            await serialization.verify(result, publicKey)
+          }
 
           if (typeof result === 'object') {
             Object.entries(expectedResult).forEach(([prop, expected]) => {
-              if (
-                prop === 'payload' &&
-                vector.signing.protected &&
-                vector.signing.protected.b64 === false
-              )
+              if (prop === 'payload' && vector.signing.protected?.b64 === false) {
                 return
+              }
               t.equal(JSON.stringify(result[prop]), JSON.stringify(expected))
             })
           } else {
@@ -96,14 +110,9 @@ export default (QUnit: QUnit) => {
           sign.setUnprotectedHeader(vector.signing.unprotected)
         }
 
-        const privateKey = await lib.importJWK(vector.input.key, vector.input.alg)
-        const publicKey = await lib.importJWK(pubjwk(vector.input.key), vector.input.alg)
-
         const result = await sign.sign(privateKey)
         await flattened.verify(result, publicKey)
       }
-
-      const publicKey = await lib.importJWK(pubjwk(vector.input.key), vector.input.alg)
 
       if (vector.output.json_flat) {
         await flattened.verify(vector.output.json_flat, publicKey)
@@ -142,13 +151,16 @@ export default (QUnit: QUnit) => {
       if (vector.webcrypto === false) {
         return false
       }
+      if (env.isElectron && vector.electron === false) {
+        return false
+      }
       if (vector.input.zip) {
         return false
       }
       return true
     }
 
-    const toJWK = (input: string | JsonWebKey) => {
+    const toJWK = (input: string | jose.JWK) => {
       if (typeof input === 'string') {
         return {
           kty: 'oct',
@@ -164,7 +176,7 @@ export default (QUnit: QUnit) => {
       const reproducible = !!vector.reproducible
 
       if (reproducible) {
-        // sign and compare results are the same
+        // encrypt and compare results are the same
         for (const [serialization, expectedResult] of [
           [flattened, vector.output.json_flat],
           [compact, vector.output.compact],
@@ -196,7 +208,7 @@ export default (QUnit: QUnit) => {
             encrypt.setAdditionalAuthenticatedData(encode(vector.input.aad))
           }
 
-          const keyManagementParameters: lib.JWEKeyManagementHeaderParameters = {}
+          const keyManagementParameters: jose.JWEKeyManagementHeaderParameters = {}
 
           if (vector.encrypting_key && vector.encrypting_key.iv) {
             keyManagementParameters.iv = lib.base64url.decode(vector.encrypting_key.iv)
@@ -211,14 +223,17 @@ export default (QUnit: QUnit) => {
           }
 
           if (vector.encrypting_key && vector.encrypting_key.epk) {
-            keyManagementParameters.epk = lib.importJWK(vector.encrypting_key.epk, 'ECDH')
+            keyManagementParameters.epk = (await keys.importJWK(
+              vector.encrypting_key.epk,
+              vector.input.alg,
+            )) as jose.KeyLike
           }
 
           if (Object.keys(keyManagementParameters).length !== 0) {
             encrypt.setKeyManagementParameters(keyManagementParameters)
           }
 
-          const publicKey = await lib.importJWK(
+          const publicKey = await keys.importJWK(
             pubjwk(toJWK(vector.input.pwd || vector.input.key)),
             dir ? vector.input.enc : vector.input.alg,
           )
@@ -244,33 +259,42 @@ export default (QUnit: QUnit) => {
           encrypt.setUnprotectedHeader(vector.encrypting_content.unprotected)
         }
 
-        const privateKey = await lib.importJWK(
+        const privateKey = (await keys.importJWK(
           toJWK(vector.input.pwd || vector.input.key),
           dir ? vector.input.enc : vector.input.alg,
-        )
+        )) as jose.KeyLike
         let publicKey
         if (privateKey.type === 'secret') {
           publicKey = privateKey
         } else {
-          publicKey = await lib.importJWK(
+          publicKey = await keys.importJWK(
             pubjwk(toJWK(vector.input.pwd || vector.input.key)),
             dir ? vector.input.enc : vector.input.alg,
           )
         }
 
         const result = await encrypt.encrypt(publicKey)
-        await flattened.decrypt(result, privateKey)
+        await flattened.decrypt(result, privateKey, {
+          keyManagementAlgorithms: [vector.input.alg],
+          contentEncryptionAlgorithms: [vector.input.enc],
+        })
       }
 
-      const privateKey = await lib.importJWK(
+      const privateKey = await keys.importJWK(
         toJWK(vector.input.pwd || vector.input.key),
         dir ? vector.input.enc : vector.input.alg,
       )
       if (vector.output.json_flat) {
-        await flattened.decrypt(vector.output.json_flat, privateKey)
+        await flattened.decrypt(vector.output.json_flat, privateKey, {
+          keyManagementAlgorithms: [vector.input.alg],
+          contentEncryptionAlgorithms: [vector.input.enc],
+        })
       }
       if (vector.output.compact) {
-        await compact.decrypt(vector.output.compact, privateKey)
+        await compact.decrypt(vector.output.compact, privateKey, {
+          keyManagementAlgorithms: [vector.input.alg],
+          contentEncryptionAlgorithms: [vector.input.enc],
+        })
       }
       t.ok(1)
     }

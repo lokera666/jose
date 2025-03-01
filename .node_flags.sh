@@ -1,8 +1,5 @@
-NODE_VERSION=$(node -v)
-export NODE_OPTIONS='--no-warnings'
+echo "Using Node.js $(node --version)"
 
-if [[ $NODE_VERSION == "v16."* ]]; then
-  export NODE_OPTIONS+=' --experimental-global-webcrypto --experimental-fetch'
-elif [[ "$NODE_VERSION" == "v18."* ]]; then
-  export NODE_OPTIONS+=' --experimental-global-webcrypto'
-fi
+node -e 'process.exit(parseInt(process.versions.node, 10))' &> /dev/null
+NODE_VERSION=$?
+export NODE_OPTIONS='--enable-source-maps --import=tsx/esm'

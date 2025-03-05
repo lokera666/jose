@@ -1,36 +1,37 @@
-import { decode as base64url } from '../../runtime/base64url.js'
-import decrypt from '../../runtime/decrypt.js'
-import { inflate } from '../../runtime/zlib.js'
+/**
+ * Decrypting JSON Web Encryption (JWE) in Flattened JSON Serialization
+ *
+ * @module
+ */
 
+import type * as types from '../../types.d.ts'
+import { decode as b64u } from '../../util/base64url.js'
+import decrypt from '../../lib/decrypt.js'
 import { JOSEAlgNotAllowed, JOSENotSupported, JWEInvalid } from '../../util/errors.js'
 import isDisjoint from '../../lib/is_disjoint.js'
 import isObject from '../../lib/is_object.js'
 import decryptKeyManagement from '../../lib/decrypt_key_management.js'
-import type {
-  FlattenedDecryptResult,
-  KeyLike,
-  FlattenedJWE,
-  JWEHeaderParameters,
-  DecryptOptions,
-  GetKeyFunction,
-  ResolvedKey,
-} from '../../types.d'
 import { encoder, decoder, concat } from '../../lib/buffer_utils.js'
 import generateCek from '../../lib/cek.js'
 import validateCrit from '../../lib/validate_crit.js'
 import validateAlgorithms from '../../lib/validate_algorithms.js'
+import normalizeKey from '../../lib/normalize_key.js'
+import checkKeyType from '../../lib/check_key_type.js'
 
 /**
  * Interface for Flattened JWE Decryption dynamic key resolution. No token components have been
  * verified at the time of this function call.
  */
 export interface FlattenedDecryptGetKey
-  extends GetKeyFunction<JWEHeaderParameters | undefined, FlattenedJWE> {}
+  extends types.GetKeyFunction<types.JWEHeaderParameters | undefined, types.FlattenedJWE> {}
 
 /**
  * Decrypts a Flattened JWE.
  *
- * @example Usage
+ * This function is exported (as a named export) from the main `'jose'` module entry point as well
+ * as from its subpath export `'jose/jwe/flattened/decrypt'`.
+ *
+ * @example
  *
  * ```js
  * const jwe = {
@@ -53,28 +54,30 @@ export interface FlattenedDecryptGetKey
  * ```
  *
  * @param jwe Flattened JWE.
- * @param key Private Key or Secret to decrypt the JWE with.
+ * @param key Private Key or Secret to decrypt the JWE with. See
+ *   {@link https://github.com/panva/jose/issues/210#jwe-alg Algorithm Key Requirements}.
  * @param options JWE Decryption options.
  */
 export function flattenedDecrypt(
-  jwe: FlattenedJWE,
-  key: KeyLike | Uint8Array,
-  options?: DecryptOptions,
-): Promise<FlattenedDecryptResult>
+  jwe: types.FlattenedJWE,
+  key: types.CryptoKey | types.KeyObject | types.JWK | Uint8Array,
+  options?: types.DecryptOptions,
+): Promise<types.FlattenedDecryptResult>
 /**
  * @param jwe Flattened JWE.
- * @param getKey Function resolving Private Key or Secret to decrypt the JWE with.
+ * @param getKey Function resolving Private Key or Secret to decrypt the JWE with. See
+ *   {@link https://github.com/panva/jose/issues/210#jwe-alg Algorithm Key Requirements}.
  * @param options JWE Decryption options.
  */
 export function flattenedDecrypt(
-  jwe: FlattenedJWE,
+  jwe: types.FlattenedJWE,
   getKey: FlattenedDecryptGetKey,
-  options?: DecryptOptions,
-): Promise<FlattenedDecryptResult & ResolvedKey>
+  options?: types.DecryptOptions,
+): Promise<types.FlattenedDecryptResult & types.ResolvedKey>
 export async function flattenedDecrypt(
-  jwe: FlattenedJWE,
-  key: KeyLike | Uint8Array | FlattenedDecryptGetKey,
-  options?: DecryptOptions,
+  jwe: types.FlattenedJWE,
+  key: types.CryptoKey | types.KeyObject | types.JWK | Uint8Array | FlattenedDecryptGetKey,
+  options?: types.DecryptOptions,
 ) {
   if (!isObject(jwe)) {
     throw new JWEInvalid('Flattened JWE must be an object')
@@ -84,16 +87,16 @@ export async function flattenedDecrypt(
     throw new JWEInvalid('JOSE Header missing')
   }
 
-  if (typeof jwe.iv !== 'string') {
-    throw new JWEInvalid('JWE Initialization Vector missing or incorrect type')
+  if (jwe.iv !== undefined && typeof jwe.iv !== 'string') {
+    throw new JWEInvalid('JWE Initialization Vector incorrect type')
   }
 
   if (typeof jwe.ciphertext !== 'string') {
     throw new JWEInvalid('JWE Ciphertext missing or incorrect type')
   }
 
-  if (typeof jwe.tag !== 'string') {
-    throw new JWEInvalid('JWE Authentication Tag missing or incorrect type')
+  if (jwe.tag !== undefined && typeof jwe.tag !== 'string') {
+    throw new JWEInvalid('JWE Authentication Tag incorrect type')
   }
 
   if (jwe.protected !== undefined && typeof jwe.protected !== 'string') {
@@ -116,10 +119,10 @@ export async function flattenedDecrypt(
     throw new JWEInvalid('JWE Per-Recipient Unprotected Header incorrect type')
   }
 
-  let parsedProt!: JWEHeaderParameters
+  let parsedProt!: types.JWEHeaderParameters
   if (jwe.protected) {
     try {
-      const protectedHeader = base64url(jwe.protected)
+      const protectedHeader = b64u(jwe.protected)
       parsedProt = JSON.parse(decoder.decode(protectedHeader))
     } catch {
       throw new JWEInvalid('JWE Protected Header is invalid')
@@ -131,7 +134,7 @@ export async function flattenedDecrypt(
     )
   }
 
-  const joseHeader: JWEHeaderParameters = {
+  const joseHeader: types.JWEHeaderParameters = {
     ...parsedProt,
     ...jwe.header,
     ...jwe.unprotected,
@@ -140,15 +143,9 @@ export async function flattenedDecrypt(
   validateCrit(JWEInvalid, new Map(), options?.crit, parsedProt, joseHeader)
 
   if (joseHeader.zip !== undefined) {
-    if (!parsedProt || !parsedProt.zip) {
-      throw new JWEInvalid('JWE "zip" (Compression Algorithm) Header MUST be integrity protected')
-    }
-
-    if (joseHeader.zip !== 'DEF') {
-      throw new JOSENotSupported(
-        'Unsupported JWE "zip" (Compression Algorithm) Header Parameter value',
-      )
-    }
+    throw new JOSENotSupported(
+      'JWE "zip" (Compression Algorithm) Header Parameter is not supported.',
+    )
   }
 
   const { alg, enc } = joseHeader
@@ -167,17 +164,24 @@ export async function flattenedDecrypt(
     options &&
     validateAlgorithms('contentEncryptionAlgorithms', options.contentEncryptionAlgorithms)
 
-  if (keyManagementAlgorithms && !keyManagementAlgorithms.has(alg)) {
-    throw new JOSEAlgNotAllowed('"alg" (Algorithm) Header Parameter not allowed')
+  if (
+    (keyManagementAlgorithms && !keyManagementAlgorithms.has(alg)) ||
+    (!keyManagementAlgorithms && alg.startsWith('PBES2'))
+  ) {
+    throw new JOSEAlgNotAllowed('"alg" (Algorithm) Header Parameter value not allowed')
   }
 
   if (contentEncryptionAlgorithms && !contentEncryptionAlgorithms.has(enc)) {
-    throw new JOSEAlgNotAllowed('"enc" (Encryption Algorithm) Header Parameter not allowed')
+    throw new JOSEAlgNotAllowed('"enc" (Encryption Algorithm) Header Parameter value not allowed')
   }
 
   let encryptedKey!: Uint8Array
   if (jwe.encrypted_key !== undefined) {
-    encryptedKey = base64url(jwe.encrypted_key!)
+    try {
+      encryptedKey = b64u(jwe.encrypted_key!)
+    } catch {
+      throw new JWEInvalid('Failed to base64url decode the encrypted_key')
+    }
   }
 
   let resolvedKey = false
@@ -185,10 +189,12 @@ export async function flattenedDecrypt(
     key = await key(parsedProt, jwe)
     resolvedKey = true
   }
+  checkKeyType(alg === 'dir' ? enc : alg, key, 'decrypt')
 
-  let cek: KeyLike | Uint8Array
+  const k = await normalizeKey(key, alg)
+  let cek: types.CryptoKey | Uint8Array
   try {
-    cek = await decryptKeyManagement(alg, key, encryptedKey, joseHeader, options)
+    cek = await decryptKeyManagement(alg, k, encryptedKey, joseHeader, options)
   } catch (err) {
     if (err instanceof TypeError || err instanceof JWEInvalid || err instanceof JOSENotSupported) {
       throw err
@@ -203,8 +209,22 @@ export async function flattenedDecrypt(
     cek = generateCek(enc)
   }
 
-  const iv = base64url(jwe.iv)
-  const tag = base64url(jwe.tag)
+  let iv: Uint8Array | undefined
+  let tag: Uint8Array | undefined
+  if (jwe.iv !== undefined) {
+    try {
+      iv = b64u(jwe.iv)
+    } catch {
+      throw new JWEInvalid('Failed to base64url decode the iv')
+    }
+  }
+  if (jwe.tag !== undefined) {
+    try {
+      tag = b64u(jwe.tag)
+    } catch {
+      throw new JWEInvalid('Failed to base64url decode the tag')
+    }
+  }
 
   const protectedHeader: Uint8Array = encoder.encode(jwe.protected ?? '')
   let additionalData: Uint8Array
@@ -215,20 +235,26 @@ export async function flattenedDecrypt(
     additionalData = protectedHeader
   }
 
-  let plaintext = await decrypt(enc, cek, base64url(jwe.ciphertext), iv, tag, additionalData)
-
-  if (joseHeader.zip === 'DEF') {
-    plaintext = await (options?.inflateRaw || inflate)(plaintext)
+  let ciphertext: Uint8Array
+  try {
+    ciphertext = b64u(jwe.ciphertext)
+  } catch {
+    throw new JWEInvalid('Failed to base64url decode the ciphertext')
   }
+  const plaintext = await decrypt(enc, cek, ciphertext, iv, tag, additionalData)
 
-  const result: FlattenedDecryptResult = { plaintext }
+  const result: types.FlattenedDecryptResult = { plaintext }
 
   if (jwe.protected !== undefined) {
     result.protectedHeader = parsedProt
   }
 
   if (jwe.aad !== undefined) {
-    result.additionalAuthenticatedData = base64url(jwe.aad!)
+    try {
+      result.additionalAuthenticatedData = b64u(jwe.aad!)
+    } catch {
+      throw new JWEInvalid('Failed to base64url decode the aad')
+    }
   }
 
   if (jwe.unprotected !== undefined) {
@@ -240,7 +266,7 @@ export async function flattenedDecrypt(
   }
 
   if (resolvedKey) {
-    return { ...result, key }
+    return { ...result, key: k }
   }
 
   return result

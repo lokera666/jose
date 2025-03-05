@@ -1,32 +1,35 @@
-import { FlattenedEncrypt, unprotected } from '../flattened/encrypt.js'
-import { JWEInvalid } from '../../util/errors.js'
+/**
+ * Encrypting JSON Web Encryption (JWE) in General JSON Serialization
+ *
+ * @module
+ */
+
+import type * as types from '../../types.d.ts'
+import { FlattenedEncrypt } from '../flattened/encrypt.js'
+import { unprotected } from '../../lib/private_symbols.js'
+import { JOSENotSupported, JWEInvalid } from '../../util/errors.js'
 import generateCek from '../../lib/cek.js'
 import isDisjoint from '../../lib/is_disjoint.js'
 import encryptKeyManagement from '../../lib/encrypt_key_management.js'
-import { encode as base64url } from '../../runtime/base64url.js'
+import { encode as b64u } from '../../util/base64url.js'
 import validateCrit from '../../lib/validate_crit.js'
+import normalizeKey from '../../lib/normalize_key.js'
+import checkKeyType from '../../lib/check_key_type.js'
 
-import type {
-  KeyLike,
-  GeneralJWE,
-  JWEHeaderParameters,
-  CritOption,
-  DeflateOption,
-} from '../../types.d'
-
+/** Used to build General JWE object's individual recipients. */
 export interface Recipient {
   /**
    * Sets the JWE Per-Recipient Unprotected Header on the Recipient object.
    *
    * @param unprotectedHeader JWE Per-Recipient Unprotected Header.
    */
-  setUnprotectedHeader(unprotectedHeader: JWEHeaderParameters): Recipient
+  setUnprotectedHeader(unprotectedHeader: types.JWEHeaderParameters): Recipient
 
   /** A shorthand for calling addRecipient() on the enclosing GeneralEncrypt instance */
   addRecipient(...args: Parameters<GeneralEncrypt['addRecipient']>): Recipient
 
   /** A shorthand for calling encrypt() on the enclosing GeneralEncrypt instance */
-  encrypt(...args: Parameters<GeneralEncrypt['encrypt']>): Promise<GeneralJWE>
+  encrypt(...args: Parameters<GeneralEncrypt['encrypt']>): Promise<types.GeneralJWE>
 
   /** Returns the enclosing GeneralEncrypt */
   done(): GeneralEncrypt
@@ -34,17 +37,21 @@ export interface Recipient {
 
 class IndividualRecipient implements Recipient {
   private parent: GeneralEncrypt
-  unprotectedHeader?: JWEHeaderParameters
-  key: KeyLike | Uint8Array
-  options: CritOption
+  unprotectedHeader?: types.JWEHeaderParameters
+  key: types.CryptoKey | types.KeyObject | types.JWK | Uint8Array
+  options: types.CritOption
 
-  constructor(enc: GeneralEncrypt, key: KeyLike | Uint8Array, options: CritOption) {
+  constructor(
+    enc: GeneralEncrypt,
+    key: types.CryptoKey | types.KeyObject | types.JWK | Uint8Array,
+    options: types.CritOption,
+  ) {
     this.parent = enc
     this.key = key
     this.options = options
   }
 
-  setUnprotectedHeader(unprotectedHeader: JWEHeaderParameters) {
+  setUnprotectedHeader(unprotectedHeader: types.JWEHeaderParameters) {
     if (this.unprotectedHeader) {
       throw new TypeError('setUnprotectedHeader can only be called once')
     }
@@ -66,9 +73,12 @@ class IndividualRecipient implements Recipient {
 }
 
 /**
- * The GeneralEncrypt class is a utility for creating General JWE objects.
+ * The GeneralEncrypt class is used to build and encrypt General JWE objects.
  *
- * @example Usage
+ * This class is exported (as a named export) from the main `'jose'` module entry point as well as
+ * from its subpath export `'jose/jwe/general/encrypt'`.
+ *
+ * @example
  *
  * ```js
  * const jwe = await new jose.GeneralEncrypt(
@@ -89,9 +99,9 @@ export class GeneralEncrypt {
 
   private _recipients: IndividualRecipient[] = []
 
-  private _protectedHeader!: JWEHeaderParameters
+  private _protectedHeader!: types.JWEHeaderParameters
 
-  private _unprotectedHeader!: JWEHeaderParameters
+  private _unprotectedHeader!: types.JWEHeaderParameters
 
   private _aad!: Uint8Array
 
@@ -104,9 +114,13 @@ export class GeneralEncrypt {
    * Adds an additional recipient for the General JWE object.
    *
    * @param key Public Key or Secret to encrypt the Content Encryption Key for the recipient with.
+   *   See {@link https://github.com/panva/jose/issues/210#jwe-alg Algorithm Key Requirements}.
    * @param options JWE Encryption options.
    */
-  addRecipient(key: KeyLike | Uint8Array, options?: CritOption): Recipient {
+  addRecipient(
+    key: types.CryptoKey | types.KeyObject | types.JWK | Uint8Array,
+    options?: types.CritOption,
+  ): Recipient {
     const recipient = new IndividualRecipient(this, key, { crit: options?.crit })
     this._recipients.push(recipient)
     return recipient
@@ -117,7 +131,7 @@ export class GeneralEncrypt {
    *
    * @param protectedHeader JWE Protected Header object.
    */
-  setProtectedHeader(protectedHeader: JWEHeaderParameters): this {
+  setProtectedHeader(protectedHeader: types.JWEHeaderParameters): this {
     if (this._protectedHeader) {
       throw new TypeError('setProtectedHeader can only be called once')
     }
@@ -130,7 +144,7 @@ export class GeneralEncrypt {
    *
    * @param sharedUnprotectedHeader JWE Shared Unprotected Header object.
    */
-  setSharedUnprotectedHeader(sharedUnprotectedHeader: JWEHeaderParameters): this {
+  setSharedUnprotectedHeader(sharedUnprotectedHeader: types.JWEHeaderParameters): this {
     if (this._unprotectedHeader) {
       throw new TypeError('setSharedUnprotectedHeader can only be called once')
     }
@@ -143,22 +157,16 @@ export class GeneralEncrypt {
    *
    * @param aad Additional Authenticated Data.
    */
-  setAdditionalAuthenticatedData(aad: Uint8Array) {
+  setAdditionalAuthenticatedData(aad: Uint8Array): this {
     this._aad = aad
     return this
   }
 
-  /**
-   * Encrypts and resolves the value of the General JWE object.
-   *
-   * @param options JWE Encryption options.
-   */
-  async encrypt(options?: DeflateOption): Promise<GeneralJWE> {
+  /** Encrypts and resolves the value of the General JWE object. */
+  async encrypt(): Promise<types.GeneralJWE> {
     if (!this._recipients.length) {
       throw new JWEInvalid('at least one recipient must be added')
     }
-
-    options = { deflateRaw: options?.deflateRaw }
 
     if (this._recipients.length === 1) {
       const [recipient] = this._recipients
@@ -168,9 +176,9 @@ export class GeneralEncrypt {
         .setProtectedHeader(this._protectedHeader)
         .setSharedUnprotectedHeader(this._unprotectedHeader)
         .setUnprotectedHeader(recipient.unprotectedHeader!)
-        .encrypt(recipient.key, { ...recipient.options, ...options })
+        .encrypt(recipient.key, { ...recipient.options })
 
-      let jwe: GeneralJWE = {
+      const jwe: types.GeneralJWE = {
         ciphertext: flattened.ciphertext,
         iv: flattened.iv,
         recipients: [{}],
@@ -228,17 +236,15 @@ export class GeneralEncrypt {
       validateCrit(JWEInvalid, new Map(), recipient.options.crit, this._protectedHeader, joseHeader)
 
       if (joseHeader.zip !== undefined) {
-        if (!this._protectedHeader || !this._protectedHeader.zip) {
-          throw new JWEInvalid(
-            'JWE "zip" (Compression Algorithm) Header MUST be integrity protected',
-          )
-        }
+        throw new JOSENotSupported(
+          'JWE "zip" (Compression Algorithm) Header Parameter is not supported.',
+        )
       }
     }
 
     const cek = generateCek(enc)
 
-    let jwe: GeneralJWE = {
+    const jwe: types.GeneralJWE = {
       ciphertext: '',
       iv: '',
       recipients: [],
@@ -247,7 +253,7 @@ export class GeneralEncrypt {
 
     for (let i = 0; i < this._recipients.length; i++) {
       const recipient = this._recipients[i]
-      const target: Record<string, string | JWEHeaderParameters> = {}
+      const target: Record<string, string | types.JWEHeaderParameters> = {}
       jwe.recipients!.push(target)
 
       const joseHeader = {
@@ -268,7 +274,6 @@ export class GeneralEncrypt {
           .setKeyManagementParameters({ p2c })
           .encrypt(recipient.key, {
             ...recipient.options,
-            ...options,
             // @ts-expect-error
             [unprotected]: true,
           })
@@ -287,20 +292,20 @@ export class GeneralEncrypt {
         continue
       }
 
-      const { encryptedKey, parameters } = await encryptKeyManagement(
+      const alg =
         recipient.unprotectedHeader?.alg! ||
-          this._protectedHeader?.alg! ||
-          this._unprotectedHeader?.alg!,
-        enc,
-        recipient.key,
-        cek,
-        { p2c },
-      )
-      target.encrypted_key = base64url(encryptedKey!)
+        this._protectedHeader?.alg! ||
+        this._unprotectedHeader?.alg!
+
+      checkKeyType(alg === 'dir' ? enc : alg, recipient.key, 'encrypt')
+
+      const k = await normalizeKey(recipient.key, alg)
+      const { encryptedKey, parameters } = await encryptKeyManagement(alg, enc, k, cek, { p2c })
+      target.encrypted_key = b64u(encryptedKey!)
       if (recipient.unprotectedHeader || parameters)
         target.header = { ...recipient.unprotectedHeader, ...parameters }
     }
 
-    return <GeneralJWE>jwe
+    return jwe as types.GeneralJWE
   }
 }

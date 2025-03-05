@@ -1,27 +1,28 @@
+/**
+ * Decrypting JSON Web Encryption (JWE) in General JSON Serialization
+ *
+ * @module
+ */
+
 import { flattenedDecrypt } from '../flattened/decrypt.js'
 import { JWEDecryptionFailed, JWEInvalid } from '../../util/errors.js'
-import type {
-  KeyLike,
-  DecryptOptions,
-  JWEHeaderParameters,
-  GetKeyFunction,
-  FlattenedJWE,
-  GeneralJWE,
-  GeneralDecryptResult,
-  ResolvedKey,
-} from '../../types.d'
+import type * as types from '../../types.d.ts'
 import isObject from '../../lib/is_object.js'
 
 /**
  * Interface for General JWE Decryption dynamic key resolution. No token components have been
  * verified at the time of this function call.
  */
-export interface GeneralDecryptGetKey extends GetKeyFunction<JWEHeaderParameters, FlattenedJWE> {}
+export interface GeneralDecryptGetKey
+  extends types.GetKeyFunction<types.JWEHeaderParameters, types.FlattenedJWE> {}
 
 /**
  * Decrypts a General JWE.
  *
- * @example Usage
+ * This function is exported (as a named export) from the main `'jose'` module entry point as well
+ * as from its subpath export `'jose/jwe/general/decrypt'`.
+ *
+ * @example
  *
  * ```js
  * const jwe = {
@@ -48,28 +49,30 @@ export interface GeneralDecryptGetKey extends GetKeyFunction<JWEHeaderParameters
  * ```
  *
  * @param jwe General JWE.
- * @param key Private Key or Secret to decrypt the JWE with.
+ * @param key Private Key or Secret to decrypt the JWE with. See
+ *   {@link https://github.com/panva/jose/issues/210#jwe-alg Algorithm Key Requirements}.
  * @param options JWE Decryption options.
  */
 export function generalDecrypt(
-  jwe: GeneralJWE,
-  key: KeyLike | Uint8Array,
-  options?: DecryptOptions,
-): Promise<GeneralDecryptResult>
+  jwe: types.GeneralJWE,
+  key: types.CryptoKey | types.KeyObject | types.JWK | Uint8Array,
+  options?: types.DecryptOptions,
+): Promise<types.GeneralDecryptResult>
 /**
  * @param jwe General JWE.
- * @param getKey Function resolving Private Key or Secret to decrypt the JWE with.
+ * @param getKey Function resolving Private Key or Secret to decrypt the JWE with. See
+ *   {@link https://github.com/panva/jose/issues/210#jwe-alg Algorithm Key Requirements}.
  * @param options JWE Decryption options.
  */
 export function generalDecrypt(
-  jwe: GeneralJWE,
+  jwe: types.GeneralJWE,
   getKey: GeneralDecryptGetKey,
-  options?: DecryptOptions,
-): Promise<GeneralDecryptResult & ResolvedKey>
+  options?: types.DecryptOptions,
+): Promise<types.GeneralDecryptResult & types.ResolvedKey>
 export async function generalDecrypt(
-  jwe: GeneralJWE,
-  key: KeyLike | Uint8Array | GeneralDecryptGetKey,
-  options?: DecryptOptions,
+  jwe: types.GeneralJWE,
+  key: types.CryptoKey | types.KeyObject | types.JWK | Uint8Array | GeneralDecryptGetKey,
+  options?: types.DecryptOptions,
 ) {
   if (!isObject(jwe)) {
     throw new JWEInvalid('General JWE must be an object')
@@ -96,7 +99,7 @@ export async function generalDecrypt(
           tag: jwe.tag,
           unprotected: jwe.unprotected,
         },
-        <Parameters<typeof flattenedDecrypt>[1]>key,
+        key as Parameters<typeof flattenedDecrypt>[1],
         options,
       )
     } catch {

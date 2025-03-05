@@ -1,7 +1,13 @@
-import { decode as base64url } from './base64url.js'
+/**
+ * JSON Web Token (JWT) Claims Set Decoding (no validation, no signature checking)
+ *
+ * @module
+ */
+
+import { decode as b64u } from './base64url.js'
 import { decoder } from '../lib/buffer_utils.js'
 import isObject from '../lib/is_object.js'
-import type { JWTPayload } from '../types.d'
+import type * as types from '../types.d.ts'
 import { JWTInvalid } from './errors.js'
 
 /**
@@ -10,7 +16,10 @@ import { JWTInvalid } from './errors.js'
  * and JWS signature verification use `jose.jwtVerify()`. For an encrypted JWT Claims Set validation
  * and JWE decryption use `jose.jwtDecrypt()`.
  *
- * @example Usage
+ * This function is exported (as a named export) from the main `'jose'` module entry point as well
+ * as from its subpath export `'jose/jwt/decode'`.
+ *
+ * @example
  *
  * ```js
  * const claims = jose.decodeJwt(token)
@@ -19,7 +28,9 @@ import { JWTInvalid } from './errors.js'
  *
  * @param jwt JWT token in compact JWS serialization.
  */
-export function decodeJwt(jwt: string) {
+export function decodeJwt<PayloadType = types.JWTPayload>(
+  jwt: string,
+): PayloadType & types.JWTPayload {
   if (typeof jwt !== 'string')
     throw new JWTInvalid('JWTs must use Compact JWS serialization, JWT must be a string')
 
@@ -31,9 +42,9 @@ export function decodeJwt(jwt: string) {
 
   let decoded: Uint8Array
   try {
-    decoded = base64url(payload)
+    decoded = b64u(payload)
   } catch {
-    throw new JWTInvalid('Failed to parse the base64url encoded payload')
+    throw new JWTInvalid('Failed to base64url decode the payload')
   }
 
   let result: unknown
@@ -43,7 +54,8 @@ export function decodeJwt(jwt: string) {
     throw new JWTInvalid('Failed to parse the decoded payload as JSON')
   }
 
-  if (!isObject<JWTPayload>(result)) throw new JWTInvalid('Invalid JWT Claims Set')
+  if (!isObject<PayloadType & types.JWTPayload>(result))
+    throw new JWTInvalid('Invalid JWT Claims Set')
 
   return result
 }

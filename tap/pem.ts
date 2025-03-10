@@ -1,10 +1,17 @@
 import type QUnit from 'qunit'
-// @ts-ignore
-import * as lib from '#dist/webapi'
 import * as env from './env.js'
 import { KEYS } from './fixtures.js'
+import type * as jose from '../src/index.js'
 
-export default (QUnit: QUnit) => {
+function normalize(pem: string) {
+  return pem.replace(/\s+$/, '')
+}
+
+export default (
+  QUnit: QUnit,
+  lib: typeof jose,
+  keys: Pick<typeof jose, 'exportJWK' | 'importJWK'>,
+) => {
   const { module, test } = QUnit
   module('pem.ts')
 
@@ -13,15 +20,12 @@ export default (QUnit: QUnit) => {
     ['ES256', KEYS.P256.pkcs8, true],
     ['ES256', KEYS.P256.spki, true],
     ['ES256', KEYS.P256.x509, true],
-    ['ES256K', KEYS.secp256k1.pkcs8, false],
-    ['ES256K', KEYS.secp256k1.spki, false],
-    ['ES256K', KEYS.secp256k1.x509, false],
     ['ES384', KEYS.P384.pkcs8, true],
     ['ES384', KEYS.P384.spki, true],
     ['ES384', KEYS.P384.x509, true],
-    ['ES512', KEYS.P521.pkcs8, !env.isDeno],
-    ['ES512', KEYS.P521.spki, !env.isDeno],
-    ['ES512', KEYS.P521.x509, !env.isDeno],
+    ['ES512', KEYS.P521.pkcs8, true],
+    ['ES512', KEYS.P521.spki, true],
+    ['ES512', KEYS.P521.x509, true],
     ['PS256', KEYS.RSA.pkcs8, true],
     ['PS256', KEYS.RSA.spki, true],
     ['PS256', KEYS.RSA.x509, true],
@@ -52,31 +56,43 @@ export default (QUnit: QUnit) => {
     ['RSA-OAEP', KEYS.RSA.pkcs8, true],
     ['RSA-OAEP', KEYS.RSA.spki, true],
     ['RSA-OAEP', KEYS.RSA.x509, true],
-    ['RSA1_5', KEYS.RSA.pkcs8, false],
-    ['RSA1_5', KEYS.RSA.spki, false],
-    ['RSA1_5', KEYS.RSA.x509, false],
     [['ECDH-ES', 'P-256'], KEYS.P256.pkcs8, true],
     [['ECDH-ES', 'P-256'], KEYS.P256.spki, true],
     [['ECDH-ES', 'P-256'], KEYS.P256.x509, true],
     [['ECDH-ES', 'P-384'], KEYS.P384.pkcs8, true],
     [['ECDH-ES', 'P-384'], KEYS.P384.spki, true],
     [['ECDH-ES', 'P-384'], KEYS.P384.x509, true],
-    [['ECDH-ES', 'P-521'], KEYS.P521.pkcs8, !env.isDeno],
-    [['ECDH-ES', 'P-521'], KEYS.P521.spki, !env.isDeno],
-    [['ECDH-ES', 'P-521'], KEYS.P521.x509, !env.isDeno],
-    [['ECDH-ES', 'secp256k1'], KEYS.secp256k1.pkcs8, false],
-    [['ECDH-ES', 'secp256k1'], KEYS.secp256k1.spki, false],
-    [['ECDH-ES', 'secp256k1'], KEYS.secp256k1.x509, false],
-    [['ECDH-ES', 'X25519'], KEYS.X25519.pkcs8, env.isDeno || env.isNode],
-    [['ECDH-ES', 'X25519'], KEYS.X25519.spki, env.isDeno || env.isNode],
-    [['ECDH-ES', 'X448'], KEYS.X448.pkcs8, env.isNode],
-    [['ECDH-ES', 'X448'], KEYS.X448.spki, env.isNode],
-    [['EdDSA', 'Ed25519'], KEYS.Ed25519.pkcs8, env.isWorkers || env.isDeno || env.isNode],
-    [['EdDSA', 'Ed25519'], KEYS.Ed25519.spki, env.isWorkers || env.isDeno || env.isNode],
-    [['EdDSA', 'Ed25519'], KEYS.Ed25519.x509, env.isWorkers || env.isDeno || env.isNode],
-    [['EdDSA', 'Ed448'], KEYS.Ed448.pkcs8, env.isNode],
-    [['EdDSA', 'Ed448'], KEYS.Ed448.spki, env.isNode],
-    [['EdDSA', 'Ed448'], KEYS.Ed448.x509, env.isNode],
+    [['ECDH-ES', 'P-521'], KEYS.P521.pkcs8, true],
+    [['ECDH-ES', 'P-521'], KEYS.P521.spki, true],
+    [['ECDH-ES', 'P-521'], KEYS.P521.x509, true],
+    [
+      ['ECDH-ES', 'X25519'],
+      KEYS.X25519.pkcs8,
+      env.isDeno ||
+        env.isNode ||
+        env.isElectron ||
+        env.isWorkerd ||
+        env.isEdgeRuntime ||
+        (env.isGecko && env.isBrowserVersionAtLeast(130)) ||
+        (env.isBlink && env.isBrowserVersionAtLeast(133)),
+    ],
+    [
+      ['ECDH-ES', 'X25519'],
+      KEYS.X25519.spki,
+      env.isDeno ||
+        env.isNode ||
+        env.isElectron ||
+        env.isWorkerd ||
+        env.isEdgeRuntime ||
+        (env.isGecko && env.isBrowserVersionAtLeast(130)) ||
+        (env.isBlink && env.isBrowserVersionAtLeast(133)),
+    ],
+    ['Ed25519', KEYS.Ed25519.pkcs8, !env.isBlink],
+    ['Ed25519', KEYS.Ed25519.spki, !env.isBlink],
+    ['Ed25519', KEYS.Ed25519.x509, !env.isBlink],
+    [['EdDSA', 'Ed25519'], KEYS.Ed25519.pkcs8, !env.isBlink],
+    [['EdDSA', 'Ed25519'], KEYS.Ed25519.spki, !env.isBlink],
+    [['EdDSA', 'Ed25519'], KEYS.Ed25519.x509, !env.isBlink],
   ]
 
   function title(alg: string, crv: string | undefined, pem: string, works: boolean) {
@@ -89,8 +105,8 @@ export default (QUnit: QUnit) => {
     result += pem.startsWith('-----BEGIN PRIVATE KEY-----')
       ? 'PKCS8 Private Key Import'
       : pem.startsWith('-----BEGIN PUBLIC KEY-----')
-      ? 'SPKI Public Key Import'
-      : 'X.509 Certificate Import'
+        ? 'SPKI Public Key Import'
+        : 'X.509 Certificate Import'
     return result
   }
 
@@ -103,26 +119,46 @@ export default (QUnit: QUnit) => {
       ;[alg, crv] = alg
     }
 
-    let method: typeof lib.importSPKI | typeof lib.importPKCS8 | typeof lib.importX509
+    let x509 = false
+    let importFn: typeof lib.importSPKI | typeof lib.importPKCS8 | typeof lib.importX509
+    let exportFn: typeof lib.exportSPKI | typeof lib.exportPKCS8
     switch (true) {
       case pem.startsWith('-----BEGIN PRIVATE KEY-----'): {
-        method = lib.importPKCS8
+        importFn = lib.importPKCS8
+        exportFn = lib.exportPKCS8
         break
       }
       case pem.startsWith('-----BEGIN PUBLIC KEY-----'): {
-        method = lib.importSPKI
+        importFn = lib.importSPKI
+        exportFn = lib.exportSPKI
         break
       }
       case pem.startsWith('-----BEGIN CERTIFICATE-----'): {
-        method = lib.importX509
+        importFn = lib.importX509
+        exportFn = lib.exportSPKI
+        x509 = true
         break
       }
       default:
-        continue
+        throw new Error()
     }
 
     const execute = async (t: typeof QUnit.assert) => {
-      await method(pem, alg)
+      const k = await importFn(pem, alg as string, { extractable: true })
+
+      if (!x509) {
+        t.strictEqual(normalize(await exportFn(k)), normalize(pem))
+        if (env.isNode && lib.importJWK !== keys.importJWK) {
+          const nCrypto = globalThis.process.getBuiltinModule('node:crypto')
+          if (pem.startsWith('-----BEGIN PRIVATE KEY-----')) {
+            t.strictEqual(normalize(await exportFn(nCrypto.createPrivateKey(pem))), normalize(pem))
+          } else {
+            t.strictEqual(normalize(await exportFn(nCrypto.createPublicKey(pem))), normalize(pem))
+          }
+        }
+      } else {
+        await exportFn(k)
+      }
       t.ok(1)
     }
 

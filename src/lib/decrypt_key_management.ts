@@ -1,26 +1,24 @@
-import { unwrap as aesKw } from '../runtime/aeskw.js'
-import * as ECDH from '../runtime/ecdhes.js'
-import { decrypt as pbes2Kw } from '../runtime/pbes2kw.js'
-import { decrypt as rsaEs } from '../runtime/rsaes.js'
-import { decode as base64url } from '../runtime/base64url.js'
+import * as aeskw from './aeskw.js'
+import * as ecdhes from './ecdhes.js'
+import * as pbes2kw from './pbes2kw.js'
+import * as rsaes from './rsaes.js'
+import { decode as b64u } from '../util/base64url.js'
 
-import type { DecryptOptions, JWEHeaderParameters, KeyLike, JWK } from '../types.d'
+import type * as types from '../types.d.ts'
 import { JOSENotSupported, JWEInvalid } from '../util/errors.js'
 import { bitLength as cekLength } from '../lib/cek.js'
 import { importJWK } from '../key/import.js'
-import checkKeyType from './check_key_type.js'
 import isObject from './is_object.js'
 import { unwrap as aesGcmKw } from './aesgcmkw.js'
+import { assertCryptoKey } from './is_key_like.js'
 
-async function decryptKeyManagement(
+export default async (
   alg: string,
-  key: KeyLike | Uint8Array,
+  key: types.CryptoKey | Uint8Array,
   encryptedKey: Uint8Array | undefined,
-  joseHeader: JWEHeaderParameters,
-  options?: DecryptOptions,
-): Promise<KeyLike | Uint8Array> {
-  checkKeyType(alg, key, 'decrypt')
-
+  joseHeader: types.JWEHeaderParameters,
+  options?: types.DecryptOptions,
+): Promise<types.CryptoKey | Uint8Array> => {
   switch (alg) {
     case 'dir': {
       // Direct Encryption
@@ -38,31 +36,41 @@ async function decryptKeyManagement(
     case 'ECDH-ES+A192KW':
     case 'ECDH-ES+A256KW': {
       // Direct Key Agreement
-      if (!isObject<JWK>(joseHeader.epk))
+      if (!isObject<types.JWK>(joseHeader.epk))
         throw new JWEInvalid(`JOSE Header "epk" (Ephemeral Public Key) missing or invalid`)
 
-      if (!ECDH.ecdhAllowed(key))
+      assertCryptoKey(key)
+      if (!ecdhes.allowed(key))
         throw new JOSENotSupported(
           'ECDH with the provided key is not allowed or not supported by your javascript runtime',
         )
 
       const epk = await importJWK(joseHeader.epk, alg)
+      assertCryptoKey(epk)
       let partyUInfo!: Uint8Array
       let partyVInfo!: Uint8Array
 
       if (joseHeader.apu !== undefined) {
         if (typeof joseHeader.apu !== 'string')
           throw new JWEInvalid(`JOSE Header "apu" (Agreement PartyUInfo) invalid`)
-        partyUInfo = base64url(joseHeader.apu)
+        try {
+          partyUInfo = b64u(joseHeader.apu)
+        } catch {
+          throw new JWEInvalid('Failed to base64url decode the apu')
+        }
       }
 
       if (joseHeader.apv !== undefined) {
         if (typeof joseHeader.apv !== 'string')
           throw new JWEInvalid(`JOSE Header "apv" (Agreement PartyVInfo) invalid`)
-        partyVInfo = base64url(joseHeader.apv)
+        try {
+          partyVInfo = b64u(joseHeader.apv)
+        } catch {
+          throw new JWEInvalid('Failed to base64url decode the apv')
+        }
       }
 
-      const sharedSecret = await ECDH.deriveKey(
+      const sharedSecret = await ecdhes.deriveKey(
         epk,
         key,
         alg === 'ECDH-ES' ? joseHeader.enc! : alg,
@@ -76,17 +84,16 @@ async function decryptKeyManagement(
       // Key Agreement with Key Wrapping
       if (encryptedKey === undefined) throw new JWEInvalid('JWE Encrypted Key missing')
 
-      return aesKw(alg.slice(-6), sharedSecret, encryptedKey)
+      return aeskw.unwrap(alg.slice(-6), sharedSecret, encryptedKey)
     }
-    case 'RSA1_5':
     case 'RSA-OAEP':
     case 'RSA-OAEP-256':
     case 'RSA-OAEP-384':
     case 'RSA-OAEP-512': {
       // Key Encryption (RSA)
       if (encryptedKey === undefined) throw new JWEInvalid('JWE Encrypted Key missing')
-
-      return rsaEs(alg, key, encryptedKey)
+      assertCryptoKey(key)
+      return rsaes.decrypt(alg, key, encryptedKey)
     }
     case 'PBES2-HS256+A128KW':
     case 'PBES2-HS384+A192KW':
@@ -105,7 +112,13 @@ async function decryptKeyManagement(
       if (typeof joseHeader.p2s !== 'string')
         throw new JWEInvalid(`JOSE Header "p2s" (PBES2 Salt) missing or invalid`)
 
-      return pbes2Kw(alg, key, encryptedKey, joseHeader.p2c, base64url(joseHeader.p2s))
+      let p2s: Uint8Array
+      try {
+        p2s = b64u(joseHeader.p2s)
+      } catch {
+        throw new JWEInvalid('Failed to base64url decode the p2s')
+      }
+      return pbes2kw.unwrap(alg, key, encryptedKey, joseHeader.p2c, p2s)
     }
     case 'A128KW':
     case 'A192KW':
@@ -113,7 +126,7 @@ async function decryptKeyManagement(
       // Key Wrapping (AES KW)
       if (encryptedKey === undefined) throw new JWEInvalid('JWE Encrypted Key missing')
 
-      return aesKw(alg, key, encryptedKey)
+      return aeskw.unwrap(alg, key, encryptedKey)
     }
     case 'A128GCMKW':
     case 'A192GCMKW':
@@ -127,8 +140,18 @@ async function decryptKeyManagement(
       if (typeof joseHeader.tag !== 'string')
         throw new JWEInvalid(`JOSE Header "tag" (Authentication Tag) missing or invalid`)
 
-      const iv = base64url(joseHeader.iv)
-      const tag = base64url(joseHeader.tag)
+      let iv: Uint8Array
+      try {
+        iv = b64u(joseHeader.iv)
+      } catch {
+        throw new JWEInvalid('Failed to base64url decode the iv')
+      }
+      let tag: Uint8Array
+      try {
+        tag = b64u(joseHeader.tag)
+      } catch {
+        throw new JWEInvalid('Failed to base64url decode the tag')
+      }
 
       return aesGcmKw(alg, key, encryptedKey, iv, tag)
     }
@@ -137,5 +160,3 @@ async function decryptKeyManagement(
     }
   }
 }
-
-export default decryptKeyManagement

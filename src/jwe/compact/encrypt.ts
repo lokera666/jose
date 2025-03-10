@@ -1,15 +1,19 @@
+/**
+ * Encrypting JSON Web Encryption (JWE) in Compact Serialization
+ *
+ * @module
+ */
+
+import type * as types from '../../types.d.ts'
 import { FlattenedEncrypt } from '../flattened/encrypt.js'
-import type {
-  KeyLike,
-  JWEKeyManagementHeaderParameters,
-  CompactJWEHeaderParameters,
-  EncryptOptions,
-} from '../../types.d'
 
 /**
- * The CompactEncrypt class is a utility for creating Compact JWE strings.
+ * The CompactEncrypt class is used to build and encrypt Compact JWE strings.
  *
- * @example Usage
+ * This class is exported (as a named export) from the main `'jose'` module entry point as well as
+ * from its subpath export `'jose/jwe/compact/encrypt'`.
+ *
+ * @example
  *
  * ```js
  * const jwe = await new jose.CompactEncrypt(
@@ -35,9 +39,10 @@ export class CompactEncrypt {
    *
    * @deprecated You should not use this method. It is only really intended for test and vector
    *   validation purposes.
+   *
    * @param cek JWE Content Encryption Key.
    */
-  setContentEncryptionKey(cek: Uint8Array) {
+  setContentEncryptionKey(cek: Uint8Array): this {
     this._flattened.setContentEncryptionKey(cek)
     return this
   }
@@ -48,9 +53,10 @@ export class CompactEncrypt {
    *
    * @deprecated You should not use this method. It is only really intended for test and vector
    *   validation purposes.
+   *
    * @param iv JWE Initialization Vector.
    */
-  setInitializationVector(iv: Uint8Array) {
+  setInitializationVector(iv: Uint8Array): this {
     this._flattened.setInitializationVector(iv)
     return this
   }
@@ -60,7 +66,7 @@ export class CompactEncrypt {
    *
    * @param protectedHeader JWE Protected Header object.
    */
-  setProtectedHeader(protectedHeader: CompactJWEHeaderParameters) {
+  setProtectedHeader(protectedHeader: types.CompactJWEHeaderParameters): this {
     this._flattened.setProtectedHeader(protectedHeader)
     return this
   }
@@ -72,7 +78,7 @@ export class CompactEncrypt {
    *
    * @param parameters JWE Key Management parameters.
    */
-  setKeyManagementParameters(parameters: JWEKeyManagementHeaderParameters) {
+  setKeyManagementParameters(parameters: types.JWEKeyManagementHeaderParameters): this {
     this._flattened.setKeyManagementParameters(parameters)
     return this
   }
@@ -80,10 +86,14 @@ export class CompactEncrypt {
   /**
    * Encrypts and resolves the value of the Compact JWE string.
    *
-   * @param key Public Key or Secret to encrypt the JWE with.
+   * @param key Public Key or Secret to encrypt the JWE with. See
+   *   {@link https://github.com/panva/jose/issues/210#jwe-alg Algorithm Key Requirements}.
    * @param options JWE Encryption options.
    */
-  async encrypt(key: KeyLike | Uint8Array, options?: EncryptOptions): Promise<string> {
+  async encrypt(
+    key: types.CryptoKey | types.KeyObject | types.JWK | Uint8Array,
+    options?: types.EncryptOptions,
+  ): Promise<string> {
     const jwe = await this._flattened.encrypt(key, options)
 
     return [jwe.protected, jwe.encrypted_key, jwe.iv, jwe.ciphertext, jwe.tag].join('.')
